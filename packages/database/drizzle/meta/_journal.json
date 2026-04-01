@@ -29,6 +29,13 @@
       "when": 1775053425414,
       "tag": "0003_damp_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775054727510,
+      "tag": "0004_wealthy_stranger",
+      "breakpoints": true
     }
   ]
 }

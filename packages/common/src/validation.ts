@@ -59,6 +59,36 @@ export const createUploadLinkSchema = z.object({
   password: z.string().min(1).max(255).optional(),
 });
 
+// ── Tracked link schemas ───────────────────────────────────────────────────
+
+export const createTrackedLinkSchema = z.object({
+  fileId: z.string().uuid().optional(),
+  folderId: z.string().uuid().optional(),
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  access: z.enum(['view', 'download']).default('view'),
+  password: z.string().min(1).max(255).optional(),
+  requireEmail: z.boolean().default(false),
+  expiresAt: z.coerce.date().optional(),
+  validFrom: z.coerce.date().optional(),
+  validUntil: z.coerce.date().optional(),
+  maxViews: z.number().int().min(1).optional(),
+});
+
+export const updateTrackedLinkSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(1000).optional(),
+  access: z.enum(['view', 'download']).optional(),
+  password: z.string().min(1).max(255).optional().nullable(),
+  requireEmail: z.boolean().optional(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  validFrom: z.coerce.date().optional().nullable(),
+  validUntil: z.coerce.date().optional().nullable(),
+  maxViews: z.number().int().min(1).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
 // ── Workspace schemas ──────────────────────────────────────────────────────
 
 export const createWorkspaceSchema = z.object({

@@ -11,6 +11,7 @@ import {
   Settings,
   Users,
   Key,
+  BarChart3,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth/client';
 import { trpc } from '@/lib/trpc/client';
@@ -59,6 +60,7 @@ export function AppSidebar({
     { href: prefix, label: 'My Files', icon: FolderOpen, key: 'files' },
     { href: `${prefix}/shared-links`, label: 'Share Links', icon: Share2, key: 'shares' },
     { href: `${prefix}/upload-links`, label: 'Upload Links', icon: Upload, key: 'uploads' },
+    { href: `${prefix}/tracked-links`, label: 'Tracked Links', icon: BarChart3, key: 'tracked' },
   ];
 
   const settingsItems = [

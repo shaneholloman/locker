@@ -13,6 +13,7 @@ import {
   Download,
   ChevronRight,
   Home,
+  BarChart3,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
 import { formatBytes, formatDate } from '@/lib/utils';
@@ -32,6 +33,7 @@ import { UploadDialog } from '@/components/upload-dialog';
 import { CreateFolderDialog } from '@/components/create-folder-dialog';
 import { RenameDialog } from '@/components/rename-dialog';
 import { ShareDialog } from '@/components/share-dialog';
+import { CreateTrackedLinkDialog } from '@/components/create-tracked-link-dialog';
 import { DroppableFolderRow } from '@/components/file-explorer/droppable-folder-row';
 import { DraggableFileRow } from '@/components/file-explorer/draggable-file-row';
 import { DesktopDropOverlay } from '@/components/desktop-drop-overlay';
@@ -55,6 +57,11 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     type: 'file' | 'folder';
   } | null>(null);
   const [shareTarget, setShareTarget] = useState<{
+    id: string;
+    name: string;
+    type: 'file' | 'folder';
+  } | null>(null);
+  const [trackTarget, setTrackTarget] = useState<{
     id: string;
     name: string;
     type: 'file' | 'folder';
@@ -281,6 +288,18 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                         <Share2 />
                         Share
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setTrackTarget({
+                            id: folder.id,
+                            name: folder.name,
+                            type: 'folder',
+                          })
+                        }
+                      >
+                        <BarChart3 />
+                        Track
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
@@ -360,6 +379,18 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                       <Share2 />
                       Share
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setTrackTarget({
+                          id: file.id,
+                          name: file.name,
+                          type: 'file',
+                        })
+                      }
+                    >
+                      <BarChart3 />
+                      Track
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       variant="destructive"
@@ -406,6 +437,13 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
           open={!!shareTarget}
           onOpenChange={(open) => !open && setShareTarget(null)}
           target={shareTarget}
+        />
+      )}
+      {trackTarget && (
+        <CreateTrackedLinkDialog
+          open={!!trackTarget}
+          onOpenChange={(open) => !open && setTrackTarget(null)}
+          target={trackTarget}
         />
       )}
     </div>

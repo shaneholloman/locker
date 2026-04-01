@@ -20,6 +20,10 @@ export const DEFAULT_SHARE_EXPIRY_DAYS = 7;
 export const INVITE_TOKEN_LENGTH = 32;
 export const INVITE_EXPIRY_DAYS = 7;
 
+// ── Tracked links ──────────────────────────────────────────────────────────
+
+export const TRACKED_LINK_TOKEN_LENGTH = 16;
+
 // ── Allowed MIME types (permissive — we allow most file types) ──────────────
 
 export const IMAGE_MIME_TYPES = [
