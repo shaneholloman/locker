@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
+import { randomBytes } from 'crypto';
 import { createRouter, protectedProcedure, workspaceProcedure, workspaceAdminProcedure } from '../init';
 import { workspaces, workspaceMembers } from '@openstore/database';
 import { createWorkspaceSchema, updateWorkspaceSchema, generateSlug } from '@openstore/common';
@@ -52,16 +53,28 @@ export const workspacesRouter = createRouter({
   create: protectedProcedure
     .input(createWorkspaceSchema)
     .mutation(async ({ ctx, input }) => {
-      let slug = generateSlug(input.name);
+      const baseSlug = generateSlug(input.name);
+      let slug = baseSlug;
+      let collision: { id: string } | undefined;
 
-      // Ensure unique slug
-      const existing = await ctx.db
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(eq(workspaces.slug, slug));
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        [collision] = await ctx.db
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.slug, slug))
+          .limit(1);
 
-      if (existing.length > 0) {
-        slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+        if (!collision) {
+          break;
+        }
+
+        const suffix = randomBytes(3).toString('hex');
+        const maxBaseLength = Math.max(1, 48 - suffix.length - 1);
+        slug = `${baseSlug.slice(0, maxBaseLength)}-${suffix}`;
+      }
+
+      if (collision) {
+        throw new Error('Unable to generate a unique workspace slug');
       }
 
       const [workspace] = await ctx.db

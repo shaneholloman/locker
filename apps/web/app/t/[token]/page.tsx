@@ -69,8 +69,8 @@ export default function TrackedLinkPage({
         }),
       });
       const result = await res.json();
-      if (result.ok) {
-        // We don't get eventId back from our current API, but the event is recorded
+      if (result.ok && typeof result.eventId === 'string') {
+        eventIdRef.current = result.eventId;
       }
     } catch {
       // Tracking failure shouldn't break the page
@@ -89,6 +89,7 @@ export default function TrackedLinkPage({
       navigator.sendBeacon(
         '/api/track',
         JSON.stringify({
+          token,
           eventId: eventIdRef.current,
           durationSeconds: duration,
         }),
@@ -97,7 +98,7 @@ export default function TrackedLinkPage({
 
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [tracked]);
+  }, [token, tracked]);
 
   const handleDownload = async (fileId?: string) => {
     try {
@@ -119,6 +120,7 @@ export default function TrackedLinkPage({
         token,
         fileId,
         password: enteredPassword,
+        email: enteredEmail,
       });
       const a = document.createElement('a');
       a.href = result.url;

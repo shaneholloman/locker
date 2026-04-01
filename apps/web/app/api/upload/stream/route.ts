@@ -5,7 +5,6 @@ import { getDb } from '@openstore/database/client';
 import { files, workspaces, workspaceMembers } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { eq, and, sql } from 'drizzle-orm';
-import { Writable } from 'node:stream';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +22,7 @@ export async function PUT(req: NextRequest) {
   const fileId = reqHeaders.get('x-file-id');
   const workspaceSlug = reqHeaders.get('x-workspace-slug');
   const contentType = req.headers.get('content-type') ?? 'application/octet-stream';
-  const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
+  const contentLengthHeader = req.headers.get('content-length');
 
   if (!fileId || !workspaceSlug) {
     return NextResponse.json(
@@ -36,12 +35,24 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'No body' }, { status: 400 });
   }
 
+  const contentLength = Number.parseInt(contentLengthHeader ?? '', 10);
+  if (!Number.isFinite(contentLength) || contentLength <= 0) {
+    return NextResponse.json(
+      { error: 'Missing or invalid content-length header' },
+      { status: 400 },
+    );
+  }
+
   const db = getDb();
   const userId = session.user.id;
 
   // Verify workspace membership
   const [membership] = await db
-    .select({ workspaceId: workspaces.id })
+    .select({
+      workspaceId: workspaces.id,
+      storageUsed: workspaces.storageUsed,
+      storageLimit: workspaces.storageLimit,
+    })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(
@@ -71,6 +82,20 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
   }
 
+  if (fileRecord.size !== contentLength) {
+    return NextResponse.json(
+      { error: 'Content length does not match initiated upload size' },
+      { status: 400 },
+    );
+  }
+
+  if (
+    (membership.storageUsed ?? 0) + contentLength >
+    (membership.storageLimit ?? 0)
+  ) {
+    return NextResponse.json({ error: 'Storage quota exceeded' }, { status: 507 });
+  }
+
   // Stream the request body to storage
   const storage = createStorage();
 
@@ -91,7 +116,7 @@ export async function PUT(req: NextRequest) {
     await db
       .update(workspaces)
       .set({
-        storageUsed: sql`${workspaces.storageUsed} + ${fileRecord.size}`,
+        storageUsed: sql`${workspaces.storageUsed} + ${contentLength}`,
       })
       .where(eq(workspaces.id, membership.workspaceId));
 

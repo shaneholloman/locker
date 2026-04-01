@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import { createRouter, workspaceProcedure, publicProcedure } from '../init';
 import {
   trackedLinks,
@@ -14,13 +14,13 @@ import {
 } from '@openstore/common';
 import { TRACKED_LINK_TOKEN_LENGTH } from '@openstore/common';
 import { createStorage } from '@openstore/storage';
+import {
+  hashLinkPassword,
+  verifyLinkPassword,
+} from '../../security/password';
 
 function generateToken(): string {
   return randomBytes(TRACKED_LINK_TOKEN_LENGTH).toString('hex');
-}
-
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
 }
 
 export const trackedLinksRouter = createRouter({
@@ -158,7 +158,7 @@ export const trackedLinksRouter = createRouter({
           description: input.description ?? null,
           access: input.access,
           hasPassword: !!input.password,
-          passwordHash: input.password ? hashPassword(input.password) : null,
+          passwordHash: input.password ? hashLinkPassword(input.password) : null,
           requireEmail: input.requireEmail,
           expiresAt: input.expiresAt ?? null,
           validFrom: input.validFrom ?? null,
@@ -189,7 +189,7 @@ export const trackedLinksRouter = createRouter({
         updateData.passwordHash = null;
       } else if (password) {
         updateData.hasPassword = true;
-        updateData.passwordHash = hashPassword(password);
+        updateData.passwordHash = hashLinkPassword(password);
       }
       delete updateData.password;
 
@@ -441,7 +441,7 @@ export const trackedLinksRouter = createRouter({
         if (!input.password) {
           return { requiresPassword: true, requiresEmail: link.requireEmail };
         }
-        if (hashPassword(input.password) !== link.passwordHash) {
+        if (!verifyLinkPassword(input.password, link.passwordHash)) {
           return { error: 'Incorrect password' };
         }
       }
@@ -519,6 +519,7 @@ export const trackedLinksRouter = createRouter({
         token: z.string(),
         fileId: z.string().uuid().optional(),
         password: z.string().optional(),
+        email: z.string().email().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -532,20 +533,47 @@ export const trackedLinksRouter = createRouter({
       if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
         throw new Error('Link expired');
       }
+      if (link.validFrom && new Date(link.validFrom) > new Date()) {
+        throw new Error('Link is not yet active');
+      }
+      if (link.validUntil && new Date(link.validUntil) < new Date()) {
+        throw new Error('Link is no longer active');
+      }
+      if (link.maxViews && link.viewCount >= link.maxViews) {
+        throw new Error('View limit reached');
+      }
+      if (link.requireEmail && !input.email) {
+        throw new Error('Email required');
+      }
       if (
         link.hasPassword &&
-        hashPassword(input.password ?? '') !== link.passwordHash
+        !verifyLinkPassword(input.password, link.passwordHash)
       ) {
         throw new Error('Incorrect password');
       }
 
-      const fileId = input.fileId ?? link.fileId;
-      if (!fileId) throw new Error('No file specified');
+      const queryConditions = [
+        eq(files.workspaceId, link.workspaceId),
+        eq(files.status, 'ready'),
+      ];
+
+      if (link.fileId) {
+        if (input.fileId && input.fileId !== link.fileId) {
+          throw new Error('File not found');
+        }
+        queryConditions.push(eq(files.id, link.fileId));
+      } else if (link.folderId) {
+        if (!input.fileId) throw new Error('No file specified');
+        queryConditions.push(eq(files.id, input.fileId));
+        queryConditions.push(eq(files.folderId, link.folderId));
+      } else {
+        throw new Error('Link target not found');
+      }
 
       const [file] = await ctx.db
         .select()
         .from(files)
-        .where(eq(files.id, fileId));
+        .where(and(...queryConditions));
       if (!file) throw new Error('File not found');
 
       // Increment download count

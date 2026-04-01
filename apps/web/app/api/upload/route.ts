@@ -75,8 +75,50 @@ export async function POST(req: NextRequest) {
   }
 
   const storage = createStorage();
-  const fileId = existingFileId || randomUUID();
-  const storagePath = `${workspaceId}/${fileId}/${file.name}`;
+  let existingUploadRecord:
+    | { id: string; size: number; storagePath: string; status: string }
+    | undefined;
+
+  if (existingFileId) {
+    const [uploadRecord] = await db
+      .select({
+        id: files.id,
+        size: files.size,
+        storagePath: files.storagePath,
+        status: files.status,
+      })
+      .from(files)
+      .where(
+        and(
+          eq(files.id, existingFileId),
+          eq(files.workspaceId, workspaceId),
+        ),
+      );
+
+    if (!uploadRecord) {
+      return NextResponse.json({ error: 'Upload not found' }, { status: 404 });
+    }
+
+    if (uploadRecord.status !== 'uploading') {
+      return NextResponse.json(
+        { error: 'Upload has already been completed or aborted' },
+        { status: 409 },
+      );
+    }
+
+    if (uploadRecord.size !== file.size) {
+      return NextResponse.json(
+        { error: 'File size does not match initiated upload' },
+        { status: 400 },
+      );
+    }
+
+    existingUploadRecord = uploadRecord;
+  }
+
+  const fileId = existingUploadRecord?.id ?? randomUUID();
+  const storagePath =
+    existingUploadRecord?.storagePath ?? `${workspaceId}/${fileId}/${file.name}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -92,11 +134,20 @@ export async function POST(req: NextRequest) {
     [newFile] = await db
       .update(files)
       .set({
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
         storagePath,
         status: 'ready',
         updatedAt: new Date(),
       })
-      .where(and(eq(files.id, existingFileId), eq(files.workspaceId, workspaceId)))
+      .where(
+        and(
+          eq(files.id, existingFileId),
+          eq(files.workspaceId, workspaceId),
+          eq(files.status, 'uploading'),
+        ),
+      )
       .returning();
   } else {
     [newFile] = await db
@@ -117,9 +168,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Update workspace storage usage
+  const billedSize = existingUploadRecord?.size ?? file.size;
   await db
     .update(workspaces)
-    .set({ storageUsed: sql`${workspaces.storageUsed} + ${file.size}` })
+    .set({ storageUsed: sql`${workspaces.storageUsed} + ${billedSize}` })
     .where(eq(workspaces.id, workspaceId));
 
   return NextResponse.json({ file: newFile });

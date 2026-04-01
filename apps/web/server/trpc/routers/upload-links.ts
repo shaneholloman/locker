@@ -1,16 +1,16 @@
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import { createRouter, workspaceProcedure, publicProcedure } from '../init';
 import { uploadLinks, folders } from '@openstore/database';
 import { createUploadLinkSchema, UPLOAD_TOKEN_LENGTH } from '@openstore/common';
+import {
+  hashLinkPassword,
+  verifyLinkPassword,
+} from '../../security/password';
 
 function generateToken(): string {
   return randomBytes(UPLOAD_TOKEN_LENGTH).toString('hex');
-}
-
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
 }
 
 export const uploadLinksRouter = createRouter({
@@ -70,7 +70,7 @@ export const uploadLinksRouter = createRouter({
           maxFileSize: input.maxFileSize ?? null,
           allowedMimeTypes: input.allowedMimeTypes ?? null,
           hasPassword: !!input.password,
-          passwordHash: input.password ? hashPassword(input.password) : null,
+          passwordHash: input.password ? hashLinkPassword(input.password) : null,
           expiresAt: input.expiresAt ?? null,
         })
         .returning();
@@ -142,7 +142,7 @@ export const uploadLinksRouter = createRouter({
         if (!input.password) {
           return { requiresPassword: true };
         }
-        if (hashPassword(input.password) !== link.passwordHash) {
+        if (!verifyLinkPassword(input.password, link.passwordHash)) {
           return { error: 'Incorrect password' };
         }
       }

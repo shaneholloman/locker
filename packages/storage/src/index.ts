@@ -3,9 +3,11 @@ import { LocalStorageAdapter } from './local';
 import { S3StorageAdapter } from './s3';
 import { R2StorageAdapter } from './r2';
 import { VercelBlobAdapter } from './vercel';
+import { verifyLocalFileSignature } from './local-signing';
 
 export type { StorageProvider };
 export { LocalStorageAdapter, S3StorageAdapter, R2StorageAdapter, VercelBlobAdapter };
+export { verifyLocalFileSignature };
 
 export function createStorage(): StorageProvider {
   switch (process.env.BLOB_STORAGE_PROVIDER) {

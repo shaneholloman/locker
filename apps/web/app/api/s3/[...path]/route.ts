@@ -97,7 +97,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ path
   const partNumber = req.nextUrl.searchParams.get('partNumber');
   const uploadId = req.nextUrl.searchParams.get('uploadId');
   if (partNumber && uploadId) {
-    return handleUploadPart(req, db, auth, key, uploadId, parseInt(partNumber, 10));
+    const parsedPartNumber = Number.parseInt(partNumber, 10);
+    if (!Number.isInteger(parsedPartNumber) || parsedPartNumber < 1) {
+      return invalidRequest('Invalid part number');
+    }
+    return handleUploadPart(req, db, auth, key, uploadId, parsedPartNumber);
   }
 
   // PutObject
@@ -210,20 +214,25 @@ async function handlePutObject(
   ws: typeof workspaces.$inferSelect,
   key: string,
 ): Promise<Response> {
-  const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
+  const contentLength = Number.parseInt(req.headers.get('content-length') ?? '', 10);
   const contentType = req.headers.get('content-type') ?? 'application/octet-stream';
 
-  if ((ws.storageUsed ?? 0) + contentLength > (ws.storageLimit ?? 0)) return quotaExceeded();
+  if (!Number.isFinite(contentLength) || contentLength < 0) {
+    return invalidRequest('Invalid content length');
+  }
   if (!req.body) return invalidRequest('Request body is required');
 
   const { dirSegments, fileName } = parseS3Key(key);
   if (!fileName) return invalidRequest('Object key must include a file name');
 
   try {
-    const folderId = await resolveOrCreateFolderChain(db, auth.workspaceId, auth.userId, dirSegments);
-
     const [existing] = await db.select({ id: files.id, size: files.size, storagePath: files.storagePath })
       .from(files).where(and(eq(files.workspaceId, auth.workspaceId), eq(files.s3Key, key)));
+
+    const projectedUsed = (ws.storageUsed ?? 0) - (existing?.size ?? 0) + contentLength;
+    if (projectedUsed > (ws.storageLimit ?? 0)) return quotaExceeded();
+
+    const folderId = await resolveOrCreateFolderChain(db, auth.workspaceId, auth.userId, dirSegments);
 
     const storage = createStorage();
     const fileId = existing?.id ?? randomUUID();
@@ -297,9 +306,13 @@ async function handleUploadPart(
     ));
 
   if (!upload) return noSuchUpload();
+  if (upload.s3Key !== key) return invalidRequest('Upload key mismatch');
   if (!req.body) return invalidRequest('Request body is required');
 
-  const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
+  const contentLength = Number.parseInt(req.headers.get('content-length') ?? '', 10);
+  if (!Number.isFinite(contentLength) || contentLength < 0) {
+    return invalidRequest('Invalid content length');
+  }
 
   // Store the part in storage with a part-specific path
   const partPath = `${upload.storagePath}.part${partNumber}`;
@@ -336,6 +349,49 @@ async function handleUploadPart(
   }
 }
 
+function createMultipartObjectStream(
+  storage: ReturnType<typeof createStorage>,
+  parts: Array<{ storagePath: string }>,
+): ReadableStream<Uint8Array> {
+  let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let currentIndex = 0;
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      while (true) {
+        if (!currentReader) {
+          if (currentIndex >= parts.length) {
+            controller.close();
+            return;
+          }
+
+          const partResult = await storage.download(parts[currentIndex]!.storagePath);
+          currentReader = (partResult.data as ReadableStream<Uint8Array>).getReader();
+          currentIndex += 1;
+        }
+
+        const { done, value } = await currentReader.read();
+
+        if (done) {
+          currentReader.releaseLock();
+          currentReader = null;
+          continue;
+        }
+
+        if (value) {
+          controller.enqueue(value);
+          return;
+        }
+      }
+    },
+    async cancel(reason) {
+      if (currentReader) {
+        await currentReader.cancel(reason);
+      }
+    },
+  });
+}
+
 async function handleCompleteMultipart(
   req: NextRequest,
   db: ReturnType<typeof getDb>,
@@ -353,6 +409,7 @@ async function handleCompleteMultipart(
     ));
 
   if (!upload) return noSuchUpload();
+  if (upload.s3Key !== key) return invalidRequest('Upload key mismatch');
 
   // Get all parts sorted by part number
   const parts = await db.select().from(s3MultipartParts)
@@ -361,78 +418,62 @@ async function handleCompleteMultipart(
 
   if (parts.length === 0) return invalidRequest('No parts uploaded');
 
+  const [existing] = await db
+    .select({ id: files.id, size: files.size, storagePath: files.storagePath })
+    .from(files)
+    .where(and(eq(files.workspaceId, auth.workspaceId), eq(files.s3Key, key)));
+
+  const totalSize = parts.reduce((sum, part) => sum + part.size, 0);
+  const projectedUsed = (ws.storageUsed ?? 0) - (existing?.size ?? 0) + totalSize;
+  if (projectedUsed > (ws.storageLimit ?? 0)) {
+    return quotaExceeded();
+  }
+
+  const { dirSegments, fileName } = parseS3Key(key);
+  if (!fileName) {
+    return invalidRequest('Object key must include a file name');
+  }
+
   const storage = createStorage();
 
   try {
-    // Concatenate all parts into the final file
-    // For local storage: read each part and write sequentially to the final path
-    // For S3/R2: the underlying provider's multipart API handles this differently,
-    // but since we stored parts as individual files, we concatenate them here
-    const partBuffers: Buffer[] = [];
-    let totalSize = 0;
-
-    for (const part of parts) {
-      const result = await storage.download(part.storagePath);
-      const reader = (result.data as ReadableStream).getReader();
-      const chunks: Uint8Array[] = [];
-      let done = false;
-      while (!done) {
-        const r = await reader.read();
-        done = r.done;
-        if (r.value) chunks.push(r.value);
-      }
-      partBuffers.push(Buffer.concat(chunks));
-      totalSize += part.size;
-    }
-
-    const finalBuffer = Buffer.concat(partBuffers);
-
-    // Quota check
-    if ((ws.storageUsed ?? 0) + totalSize > (ws.storageLimit ?? 0)) {
-      return quotaExceeded();
-    }
-
-    // Upload the concatenated file
+    // Stream parts into a single logical object to avoid buffering entire uploads.
+    const mergedStream = createMultipartObjectStream(storage, parts);
     await storage.upload({
       path: upload.storagePath,
-      data: finalBuffer,
+      data: mergedStream,
       contentType: upload.contentType,
     });
 
-    // Clean up part files
-    for (const part of parts) {
-      try { await storage.delete(part.storagePath); } catch { /* best effort */ }
-    }
-
-    // Resolve folder chain and create file record
-    const { dirSegments, fileName } = parseS3Key(key);
     const folderId = await resolveOrCreateFolderChain(db, auth.workspaceId, auth.userId, dirSegments);
-    const fileId = randomUUID();
     const etag = createHash('md5').update(uploadId).digest('hex');
 
-    // Check for existing file with same s3Key (overwrite)
-    const [existing] = await db.select({ id: files.id, size: files.size })
-      .from(files).where(and(eq(files.workspaceId, auth.workspaceId), eq(files.s3Key, key)));
-
+    const sizeDiff = totalSize - (existing?.size ?? 0);
     if (existing) {
       await db.update(files).set({
         size: totalSize, mimeType: upload.contentType, storagePath: upload.storagePath,
         checksum: etag, updatedAt: new Date(),
       }).where(eq(files.id, existing.id));
-      const sizeDiff = totalSize - existing.size;
-      if (sizeDiff !== 0) {
-        await db.update(workspaces).set({ storageUsed: sql`GREATEST(${workspaces.storageUsed} + ${sizeDiff}, 0)` })
-          .where(eq(workspaces.id, auth.workspaceId));
+
+      if (existing.storagePath !== upload.storagePath) {
+        try {
+          await storage.delete(existing.storagePath);
+        } catch {
+          /* best effort */
+        }
       }
     } else {
       await db.insert(files).values({
-        id: fileId, workspaceId: auth.workspaceId, userId: auth.userId, folderId,
+        id: randomUUID(), workspaceId: auth.workspaceId, userId: auth.userId, folderId,
         name: fileName, mimeType: upload.contentType, size: totalSize,
         storagePath: upload.storagePath,
         storageProvider: process.env.BLOB_STORAGE_PROVIDER ?? 'local',
         status: 'ready', s3Key: key, checksum: etag,
       });
-      await db.update(workspaces).set({ storageUsed: sql`${workspaces.storageUsed} + ${totalSize}` })
+    }
+
+    if (sizeDiff !== 0) {
+      await db.update(workspaces).set({ storageUsed: sql`GREATEST(${workspaces.storageUsed} + ${sizeDiff}, 0)` })
         .where(eq(workspaces.id, auth.workspaceId));
     }
 
@@ -440,6 +481,14 @@ async function handleCompleteMultipart(
     await db.update(s3MultipartUploads).set({ status: 'completed' })
       .where(eq(s3MultipartUploads.id, upload.id));
     await db.delete(s3MultipartParts).where(eq(s3MultipartParts.uploadId, uploadId));
+
+    for (const part of parts) {
+      try {
+        await storage.delete(part.storagePath);
+      } catch {
+        /* best effort */
+      }
+    }
 
     return xmlResponse(completeMultipartUploadXml(bucket, key, etag));
   } catch (err) {

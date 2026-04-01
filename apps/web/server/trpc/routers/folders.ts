@@ -107,6 +107,20 @@ export const foldersRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       // Prevent moving folder into itself or its children
       if (input.targetFolderId) {
+        const [targetFolder] = await ctx.db
+          .select({ id: folders.id })
+          .from(folders)
+          .where(
+            and(
+              eq(folders.id, input.targetFolderId),
+              eq(folders.workspaceId, ctx.workspaceId),
+            ),
+          );
+
+        if (!targetFolder) {
+          throw new Error('Target folder not found');
+        }
+
         let currentId: string | null = input.targetFolderId;
         while (currentId) {
           if (currentId === input.id) {
@@ -115,7 +129,15 @@ export const foldersRouter = createRouter({
           const [parent] = await ctx.db
             .select({ parentId: folders.parentId })
             .from(folders)
-            .where(eq(folders.id, currentId));
+            .where(
+              and(
+                eq(folders.id, currentId),
+                eq(folders.workspaceId, ctx.workspaceId),
+              ),
+            );
+          if (!parent) {
+            throw new Error('Target folder not found');
+          }
           currentId = parent?.parentId ?? null;
         }
       }

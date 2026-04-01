@@ -3,11 +3,8 @@ import { getDb } from '@openstore/database/client';
 import { files, uploadLinks, workspaces } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { eq, sql } from 'drizzle-orm';
-import { randomUUID, createHash } from 'crypto';
-
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
-}
+import { randomUUID } from 'crypto';
+import { verifyLinkPassword } from '@/server/security/password';
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -40,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (link.hasPassword) {
-    if (!password || hashPassword(password) !== link.passwordHash) {
+    if (!verifyLinkPassword(password ?? undefined, link.passwordHash)) {
       return NextResponse.json({ error: 'Incorrect password' }, { status: 403 });
     }
   }

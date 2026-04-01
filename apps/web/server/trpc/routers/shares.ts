@@ -1,17 +1,17 @@
 import { z } from 'zod';
 import { eq, and, sql } from 'drizzle-orm';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import { createRouter, workspaceProcedure, publicProcedure } from '../init';
 import { shareLinks, files, folders } from '@openstore/database';
 import { createShareLinkSchema, SHARE_TOKEN_LENGTH } from '@openstore/common';
 import { createStorage } from '@openstore/storage';
+import {
+  hashLinkPassword,
+  verifyLinkPassword,
+} from '../../security/password';
 
 function generateToken(): string {
   return randomBytes(SHARE_TOKEN_LENGTH).toString('hex');
-}
-
-function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
 }
 
 export const sharesRouter = createRouter({
@@ -89,7 +89,7 @@ export const sharesRouter = createRouter({
           token,
           access: input.access,
           hasPassword: !!input.password,
-          passwordHash: input.password ? hashPassword(input.password) : null,
+          passwordHash: input.password ? hashLinkPassword(input.password) : null,
           expiresAt: input.expiresAt ?? null,
           maxDownloads: input.maxDownloads ?? null,
         })
@@ -150,7 +150,11 @@ export const sharesRouter = createRouter({
       }
 
       // Check max downloads
-      if (link.maxDownloads && link.downloadCount >= link.maxDownloads) {
+      if (
+        link.access === 'download' &&
+        link.maxDownloads &&
+        link.downloadCount >= link.maxDownloads
+      ) {
         return { error: 'Download limit reached' };
       }
 
@@ -159,7 +163,7 @@ export const sharesRouter = createRouter({
         if (!input.password) {
           return { requiresPassword: true };
         }
-        if (hashPassword(input.password) !== link.passwordHash) {
+        if (!verifyLinkPassword(input.password, link.passwordHash)) {
           return { error: 'Incorrect password' };
         }
       }
@@ -215,7 +219,6 @@ export const sharesRouter = createRouter({
         .update(shareLinks)
         .set({
           lastAccessedAt: new Date(),
-          downloadCount: sql`${shareLinks.downloadCount} + 1`,
         })
         .where(eq(shareLinks.id, link.id));
 
@@ -241,21 +244,61 @@ export const sharesRouter = createRouter({
       if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
         throw new Error('Link expired');
       }
-      if (link.hasPassword && hashPassword(input.password ?? '') !== link.passwordHash) {
+      if (
+        link.hasPassword &&
+        !verifyLinkPassword(input.password, link.passwordHash)
+      ) {
         throw new Error('Incorrect password');
       }
+      if (link.maxDownloads && link.downloadCount >= link.maxDownloads) {
+        throw new Error('Download limit reached');
+      }
 
-      const fileId = input.fileId ?? link.fileId;
-      if (!fileId) throw new Error('No file specified');
+      const queryConditions = [
+        eq(files.workspaceId, link.workspaceId),
+        eq(files.status, 'ready'),
+      ];
+
+      if (link.fileId) {
+        if (input.fileId && input.fileId !== link.fileId) {
+          throw new Error('File not found');
+        }
+        queryConditions.push(eq(files.id, link.fileId));
+      } else if (link.folderId) {
+        if (!input.fileId) throw new Error('No file specified');
+        queryConditions.push(eq(files.id, input.fileId));
+        queryConditions.push(eq(files.folderId, link.folderId));
+      } else {
+        throw new Error('Link target not found');
+      }
 
       const [file] = await ctx.db
         .select()
         .from(files)
-        .where(eq(files.id, fileId));
+        .where(and(...queryConditions));
       if (!file) throw new Error('File not found');
 
       const storage = createStorage();
       const url = await storage.getSignedUrl(file.storagePath, 3600);
+
+      const [updated] = await ctx.db
+        .update(shareLinks)
+        .set({
+          downloadCount: sql`${shareLinks.downloadCount} + 1`,
+          lastAccessedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(shareLinks.id, link.id),
+            sql`${shareLinks.maxDownloads} is null or ${shareLinks.downloadCount} < ${shareLinks.maxDownloads}`,
+          ),
+        )
+        .returning({ id: shareLinks.id });
+
+      if (!updated) {
+        throw new Error('Download limit reached');
+      }
+
       return { url, filename: file.name };
     }),
 });

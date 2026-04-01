@@ -136,11 +136,15 @@ export const abortUploadSchema = z.object({
 });
 
 export function generateSlug(name: string): string {
-  return name
+  const slug = name
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .slice(0, 48);
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+    .replace(/^-+|-+$/g, '');
+
+  return slug || 'workspace';
 }

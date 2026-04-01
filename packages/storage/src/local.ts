@@ -1,20 +1,35 @@
 import * as fs from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, createReadStream } from 'node:fs';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { StorageProvider } from './interface';
+import { createLocalFileSignature } from './local-signing';
 
 export class LocalStorageAdapter implements StorageProvider {
   readonly supportsPresignedUpload = false;
   private baseDir: string;
+  private resolvedBaseDir: string;
 
   constructor() {
     this.baseDir = process.env.LOCAL_BLOB_DIR ?? './local-blobs';
+    this.resolvedBaseDir = path.resolve(this.baseDir);
   }
 
   private resolvePath(filePath: string): string {
-    return path.resolve(this.baseDir, filePath);
+    const resolvedPath = path.resolve(this.baseDir, filePath);
+    const normalizedBase = `${this.resolvedBaseDir}${path.sep}`;
+    if (
+      resolvedPath !== this.resolvedBaseDir &&
+      !resolvedPath.startsWith(normalizedBase)
+    ) {
+      throw new Error('Invalid blob path');
+    }
+    return resolvedPath;
+  }
+
+  private encodePathForUrl(filePath: string): string {
+    return filePath.split('/').map(encodeURIComponent).join('/');
   }
 
   async upload(params: {
@@ -36,7 +51,8 @@ export class LocalStorageAdapter implements StorageProvider {
       await pipeline(nodeReadable, writeStream);
     }
 
-    return { url: `/api/files/serve/${params.path}`, path: params.path };
+    const url = await this.getSignedUrl(params.path);
+    return { url, path: params.path };
   }
 
   async download(filePath: string): Promise<{
@@ -45,15 +61,8 @@ export class LocalStorageAdapter implements StorageProvider {
     size: number;
   }> {
     const fullPath = this.resolvePath(filePath);
-    const buffer = await fs.readFile(fullPath);
     const stat = await fs.stat(fullPath);
-
-    const readable = new Readable({
-      read() {
-        this.push(buffer);
-        this.push(null);
-      },
-    });
+    const readable = createReadStream(fullPath);
 
     const stream = Readable.toWeb(readable) as ReadableStream;
     return {
@@ -63,8 +72,12 @@ export class LocalStorageAdapter implements StorageProvider {
     };
   }
 
-  async getSignedUrl(filePath: string, _expiresIn?: number): Promise<string> {
-    return `/api/files/serve/${filePath}`;
+  async getSignedUrl(filePath: string, expiresIn = 3600): Promise<string> {
+    const ttl = Math.max(1, Math.floor(expiresIn));
+    const expiresAt = Math.floor(Date.now() / 1000) + ttl;
+    const signature = createLocalFileSignature(filePath, expiresAt);
+    const encodedPath = this.encodePathForUrl(filePath);
+    return `/api/files/serve/${encodedPath}?exp=${expiresAt}&sig=${signature}`;
   }
 
   async getUploadUrl(params: {
