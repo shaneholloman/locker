@@ -6,6 +6,7 @@ import { createStorage } from '@openstore/storage';
 import { renameFileSchema, moveItemSchema, paginationSchema, sortSchema } from '@openstore/common';
 import { enhanceSearchResultsWithPlugins } from '../../plugins/search';
 import { qmdClient } from '../../plugins/handlers/qmd-client';
+import { invalidateWorkspaceVfsSnapshot } from '../../vfs/openstore-vfs';
 
 export const filesRouter = createRouter({
   list: workspaceProcedure
@@ -105,6 +106,7 @@ export const filesRouter = createRouter({
         .where(and(eq(files.id, input.id), eq(files.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -131,6 +133,7 @@ export const filesRouter = createRouter({
         .where(and(eq(files.id, input.id), eq(files.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -170,6 +173,7 @@ export const filesRouter = createRouter({
         .set({ storageUsed: sql`GREATEST(${workspaces.storageUsed} - ${file.size}, 0)` })
         .where(eq(workspaces.id, ctx.workspaceId));
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return { success: true };
     }),
 
@@ -209,6 +213,7 @@ export const filesRouter = createRouter({
           .where(eq(workspaces.id, ctx.workspaceId));
       }
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return { success: true, deleted: input.ids.length };
     }),
 });

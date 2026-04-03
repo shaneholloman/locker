@@ -3,6 +3,7 @@ import { eq, and, asc, isNull } from 'drizzle-orm';
 import { createRouter, workspaceProcedure } from '../init';
 import { folders, files } from '@openstore/database';
 import { createFolderSchema, renameFolderSchema, moveItemSchema } from '@openstore/common';
+import { invalidateWorkspaceVfsSnapshot } from '../../vfs/openstore-vfs';
 
 export const foldersRouter = createRouter({
   list: workspaceProcedure
@@ -87,6 +88,7 @@ export const foldersRouter = createRouter({
         })
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return folder;
     }),
 
@@ -99,6 +101,7 @@ export const foldersRouter = createRouter({
         .where(and(eq(folders.id, input.id), eq(folders.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -148,6 +151,7 @@ export const foldersRouter = createRouter({
         .where(and(eq(folders.id, input.id), eq(folders.workspaceId, ctx.workspaceId)))
         .returning();
 
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return updated;
     }),
 
@@ -157,6 +161,7 @@ export const foldersRouter = createRouter({
       // This cascades — files in this folder get folderId set to null
       // Subfolders are deleted via application-level cascade
       await deleteFolderRecursive(ctx.db, ctx.workspaceId, input.id);
+      invalidateWorkspaceVfsSnapshot(ctx.workspaceId);
       return { success: true };
     }),
 });

@@ -9,6 +9,7 @@ Open-source file storage platform. A self-hostable alternative to Dropbox and Go
 - **Upload Links** — Let others upload files to your storage without an account
 - **Storage Provider Agnostic** — Swap between Local, AWS S3, Cloudflare R2, or Vercel Blob via a single env var
 - **Storage Quotas** — Per-user storage limits with usage tracking
+- **Virtual Bash Filesystem (beta)** — Traverse workspace files with `ls`, `cd`, `find`, `cat`, `grep`, etc. via `just-bash`
 
 ## Tech Stack
 
@@ -103,6 +104,24 @@ Set `BLOB_STORAGE_PROVIDER` in `.env`:
 | `pnpm db:migrate` | Apply pending migrations |
 | `pnpm db:seed` | Seed the database |
 | `pnpm format` | Format code with Prettier |
+
+## Virtual Filesystem Shell API
+
+OpenStore now includes a read-only virtual filesystem over workspace files/folders, powered by [`just-bash`](https://github.com/vercel-labs/just-bash).
+
+The shell API is available on tRPC router `vfsShell`:
+
+- `vfsShell.createSession({ cwd? })` → create a workspace-scoped shell session
+- `vfsShell.exec({ sessionId, command, timeoutMs? })` → run a bash command
+- `vfsShell.session({ sessionId })` → get session `cwd` + expiry
+- `vfsShell.closeSession({ sessionId })` → close a session
+
+Implementation details:
+
+- Directory tree is bootstrapped from `folders` + `files` and cached in memory.
+- File contents are fetched lazily from the configured storage provider and cached.
+- All write operations (`rm`, `mv`, redirections, etc.) fail with `EROFS` (read-only filesystem).
+- Access is workspace-scoped and enforced by existing workspace membership checks.
 
 ## License
 

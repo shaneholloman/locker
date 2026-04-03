@@ -8,6 +8,7 @@ import { MAX_FILE_SIZE } from '@openstore/common';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { qmdClient, streamToString } from '../../../server/plugins/handlers/qmd-client';
+import { invalidateWorkspaceVfsSnapshot } from '../../../server/vfs/openstore-vfs';
 
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -193,5 +194,6 @@ export async function POST(req: NextRequest) {
     })();
   }
 
+  invalidateWorkspaceVfsSnapshot(workspaceId);
   return NextResponse.json({ file: newFile });
 }

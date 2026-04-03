@@ -5,6 +5,7 @@ import { getDb } from '@openstore/database/client';
 import { files, workspaces, workspaceMembers } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { eq, and, sql } from 'drizzle-orm';
+import { invalidateWorkspaceVfsSnapshot } from '../../../../server/vfs/openstore-vfs';
 
 export const runtime = 'nodejs';
 
@@ -120,6 +121,7 @@ export async function PUT(req: NextRequest) {
       })
       .where(eq(workspaces.id, membership.workspaceId));
 
+    invalidateWorkspaceVfsSnapshot(membership.workspaceId);
     return NextResponse.json({ success: true, fileId });
   } catch (err) {
     // Clean up on failure
@@ -129,6 +131,7 @@ export async function PUT(req: NextRequest) {
       // best effort
     }
     await db.delete(files).where(eq(files.id, fileId));
+    invalidateWorkspaceVfsSnapshot(membership.workspaceId);
 
     return NextResponse.json(
       { error: (err as Error).message ?? 'Upload failed' },

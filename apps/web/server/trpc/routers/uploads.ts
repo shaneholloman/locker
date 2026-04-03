@@ -5,6 +5,7 @@ import { createRouter, workspaceProcedure } from '../init';
 import { files, folders, workspaces } from '@openstore/database';
 import { createStorage } from '@openstore/storage';
 import { qmdClient, streamToString } from '../../plugins/handlers/qmd-client';
+import { invalidateWorkspaceVfsSnapshot } from '../../vfs/openstore-vfs';
 import {
   initiateUploadSchema,
   completeUploadSchema,
@@ -190,6 +191,7 @@ export const uploadsRouter = createRouter({
         })();
       }
 
+      invalidateWorkspaceVfsSnapshot(workspaceId);
       return updated;
     }),
 
@@ -234,6 +236,7 @@ export const uploadsRouter = createRouter({
       // Delete the file record
       await db.delete(files).where(eq(files.id, input.fileId));
 
+      invalidateWorkspaceVfsSnapshot(workspaceId);
       return { success: true };
     }),
 });
