@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   FolderOpen,
   Share2,
@@ -13,28 +13,29 @@ import {
   Key,
   BarChart3,
   Puzzle,
+  TerminalSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   ChevronsUpDown,
-} from 'lucide-react';
-import { Logo } from '@/assets/logo';
-import { signOut } from '@/lib/auth/client';
-import { trpc } from '@/lib/trpc/client';
-import { StorageUsage } from './storage-usage';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { Logo } from "@/assets/logo";
+import { signOut } from "@/lib/auth/client";
+import { trpc } from "@/lib/trpc/client";
+import { StorageUsage } from "./storage-usage";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from "@/components/ui/tooltip";
 
 function NavItem({
   href,
@@ -53,11 +54,11 @@ function NavItem({
     <Link
       href={href}
       className={cn(
-        'group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors',
+        "group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors",
         isActive
-          ? 'bg-accent text-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-        collapsed ? 'w-8 justify-center' : 'w-full',
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        collapsed ? "w-8 justify-center" : "w-full",
       )}
     >
       <Icon className="size-4 shrink-0" />
@@ -92,8 +93,8 @@ function NavSection({
     <div className="flex w-full flex-col gap-0.5">
       <div
         className={cn(
-          'overflow-hidden transition-all duration-300',
-          collapsed ? 'h-0' : 'h-6',
+          "overflow-hidden transition-all duration-300",
+          collapsed ? "h-0" : "h-6",
         )}
       >
         <div className="flex h-6 items-center px-2 text-xs font-medium text-muted-foreground">
@@ -115,58 +116,64 @@ export function AppSidebar({
   const [collapsed, setCollapsed] = useState(false);
 
   const slugMatch = pathname.match(/\/w\/([^/]+)/);
-  const slug = slugMatch?.[1] ?? '';
+  const slug = slugMatch?.[1] ?? "";
   const prefix = `/w/${slug}`;
 
   const { data: workspacesList } = trpc.workspaces.list.useQuery();
   const currentWorkspace = workspacesList?.find((w) => w.slug === slug) ?? null;
 
   const navItems = [
-    { href: prefix, label: 'My Files', icon: FolderOpen, key: 'files' },
+    { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
     {
       href: `${prefix}/shared-links`,
-      label: 'Share Links',
+      label: "Share Links",
       icon: Share2,
-      key: 'shares',
+      key: "shares",
     },
     {
       href: `${prefix}/upload-links`,
-      label: 'Upload Links',
+      label: "Upload Links",
       icon: Upload,
-      key: 'uploads',
+      key: "uploads",
     },
     {
       href: `${prefix}/tracked-links`,
-      label: 'Tracked Links',
+      label: "Tracked Links",
       icon: BarChart3,
-      key: 'tracked',
+      key: "tracked",
     },
     {
       href: `${prefix}/plugins`,
-      label: 'Plugins',
+      label: "Plugins",
       icon: Puzzle,
-      key: 'plugins',
+      key: "plugins",
+    },
+    {
+      href: `${prefix}/terminal`,
+      label: "Terminal",
+      icon: TerminalSquare,
+      key: "terminal",
     },
   ];
 
   const settingsItems = [
     {
       href: `${prefix}/settings`,
-      label: 'Settings',
+      label: "Settings",
       icon: Settings,
-      key: 'settings',
+      key: "settings",
     },
     {
       href: `${prefix}/settings/members`,
-      label: 'Members',
+      label: "Members",
       icon: Users,
-      key: 'members',
+      key: "members",
     },
     {
       href: `${prefix}/settings/api-keys`,
-      label: 'API Keys',
+      label: "API Keys",
       icon: Key,
-      key: 'api-keys',
+      key: "api-keys",
     },
   ];
 
@@ -178,14 +185,14 @@ export function AppSidebar({
       <div className="relative grid size-5 place-items-center">
         <PanelLeftClose
           className={cn(
-            'absolute size-4 transition-all',
-            collapsed ? 'scale-0' : 'scale-100',
+            "absolute size-4 transition-all",
+            collapsed ? "scale-0" : "scale-100",
           )}
         />
         <PanelLeftOpen
           className={cn(
-            'absolute size-4 transition-all',
-            collapsed ? 'scale-100' : 'scale-0',
+            "absolute size-4 transition-all",
+            collapsed ? "scale-100" : "scale-0",
           )}
         />
       </div>
@@ -195,8 +202,8 @@ export function AppSidebar({
   return (
     <div
       className={cn(
-        'flex h-full shrink-0 flex-col justify-between overflow-hidden p-2 transition-all duration-300 ease-in-out',
-        collapsed ? 'w-[52px]' : 'w-[240px]',
+        "flex h-full shrink-0 flex-col justify-between overflow-hidden p-2 transition-all duration-300 ease-in-out",
+        collapsed ? "w-[52px]" : "w-[240px]",
       )}
     >
       {/* Top section */}
@@ -204,8 +211,8 @@ export function AppSidebar({
         {/* Header */}
         <div
           className={cn(
-            'flex h-12 items-center gap-2 transition-all',
-            collapsed ? 'justify-center' : 'px-1',
+            "flex h-12 items-center gap-2 transition-all",
+            collapsed ? "justify-center" : "px-1",
           )}
         >
           {!collapsed && (
@@ -214,28 +221,36 @@ export function AppSidebar({
                 <DropdownMenu>
                   <DropdownMenuTrigger className="flex items-center gap-2 min-w-0 rounded-lg p-1 -ml-1 hover:bg-accent transition-colors outline-none">
                     <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">
-                      {currentWorkspace.name[0]?.toUpperCase() ?? 'W'}
+                      {currentWorkspace.name[0]?.toUpperCase() ?? "W"}
                     </div>
                     <span className="truncate text-sm font-semibold">
                       {currentWorkspace.name}
                     </span>
                     <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" sideOffset={4} className="w-56">
+                  <DropdownMenuContent
+                    align="start"
+                    sideOffset={4}
+                    className="w-56"
+                  >
                     {workspacesList?.map((ws) => (
                       <DropdownMenuItem
                         key={ws.id}
                         onSelect={() => router.push(`/w/${ws.slug}`)}
-                        className={ws.id === currentWorkspace.id ? 'bg-accent' : ''}
+                        className={
+                          ws.id === currentWorkspace.id ? "bg-accent" : ""
+                        }
                       >
                         <div className="flex size-6 items-center justify-center rounded bg-primary text-primary-foreground font-semibold text-xs shrink-0">
-                          {ws.name[0]?.toUpperCase() ?? 'W'}
+                          {ws.name[0]?.toUpperCase() ?? "W"}
                         </div>
                         <span className="truncate">{ws.name}</span>
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => router.push('/onboarding')}>
+                    <DropdownMenuItem
+                      onSelect={() => router.push("/onboarding")}
+                    >
                       <Plus className="size-4" />
                       Create workspace
                     </DropdownMenuItem>
@@ -257,7 +272,7 @@ export function AppSidebar({
           <NavSection label="Files" collapsed={collapsed}>
             {navItems.map((item) => {
               const isActive =
-                item.key === 'files'
+                item.key === "files"
                   ? pathname === prefix ||
                     pathname.startsWith(`${prefix}/folder`)
                   : pathname.startsWith(item.href);
@@ -308,7 +323,7 @@ export function AppSidebar({
               <button
                 onClick={async () => {
                   await signOut();
-                  router.push('/login');
+                  router.push("/login");
                 }}
                 className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               >
@@ -323,7 +338,7 @@ export function AppSidebar({
           <button
             onClick={async () => {
               await signOut();
-              router.push('/login');
+              router.push("/login");
             }}
             className="flex h-8 w-full items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
