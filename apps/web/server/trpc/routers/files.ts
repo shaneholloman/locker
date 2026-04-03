@@ -148,12 +148,17 @@ export const filesRouter = createRouter({
       const storage = createStorage();
       await storage.delete(file.storagePath);
 
-      // De-index from QMD search
+      // De-index from QMD search (only if plugin is active for this workspace)
       if (qmdClient.isConfigured()) {
-        void qmdClient.deindexFile({
-          workspaceId: ctx.workspaceId,
-          fileId: file.id,
-        }).catch(() => {});
+        void (async () => {
+          try {
+            if (!(await qmdClient.isActiveForWorkspace(ctx.db, ctx.workspaceId))) return;
+            await qmdClient.deindexFile({
+              workspaceId: ctx.workspaceId,
+              fileId: file.id,
+            });
+          } catch {}
+        })();
       }
 
       // Delete from database
@@ -174,6 +179,10 @@ export const filesRouter = createRouter({
       const storage = createStorage();
       let totalSize = 0;
 
+      const qmdActive =
+        qmdClient.isConfigured() &&
+        (await qmdClient.isActiveForWorkspace(ctx.db, ctx.workspaceId));
+
       for (const id of input.ids) {
         const [file] = await ctx.db
           .select()
@@ -182,7 +191,7 @@ export const filesRouter = createRouter({
 
         if (file) {
           await storage.delete(file.storagePath);
-          if (qmdClient.isConfigured()) {
+          if (qmdActive) {
             void qmdClient.deindexFile({
               workspaceId: ctx.workspaceId,
               fileId: file.id,

@@ -175,10 +175,11 @@ export async function POST(req: NextRequest) {
     .set({ storageUsed: sql`${workspaces.storageUsed} + ${billedSize}` })
     .where(eq(workspaces.id, workspaceId));
 
-  // Fire-and-forget: index file for QMD search
+  // Fire-and-forget: index file for QMD search (only if plugin is active for this workspace)
   if (newFile && qmdClient.isConfigured() && qmdClient.shouldIndex(newFile.mimeType)) {
     void (async () => {
       try {
+        if (!(await qmdClient.isActiveForWorkspace(db, workspaceId))) return;
         const dl = await storage.download(newFile.storagePath);
         const content = await streamToString(dl.data);
         await qmdClient.indexFile({

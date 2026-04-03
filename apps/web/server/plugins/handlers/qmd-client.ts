@@ -1,3 +1,7 @@
+import { and, eq } from 'drizzle-orm';
+import { workspacePlugins } from '@openstore/database';
+import type { Database } from '@openstore/database';
+
 const QMD_SERVICE_URL = process.env.QMD_SERVICE_URL;
 const QMD_API_SECRET = process.env.QMD_API_SECRET;
 
@@ -54,6 +58,21 @@ export const qmdClient = {
   },
 
   shouldIndex,
+
+  async isActiveForWorkspace(db: Database, workspaceId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: workspacePlugins.id })
+      .from(workspacePlugins)
+      .where(
+        and(
+          eq(workspacePlugins.workspaceId, workspaceId),
+          eq(workspacePlugins.pluginSlug, 'qmd-search'),
+          eq(workspacePlugins.status, 'active'),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  },
 
   async indexFile(params: {
     workspaceId: string;

@@ -171,10 +171,11 @@ export const uploadsRouter = createRouter({
         })
         .where(eq(workspaces.id, workspaceId));
 
-      // Fire-and-forget: index file for QMD search
+      // Fire-and-forget: index file for QMD search (only if plugin is active for this workspace)
       if (qmdClient.isConfigured() && qmdClient.shouldIndex(file.mimeType)) {
         void (async () => {
           try {
+            if (!(await qmdClient.isActiveForWorkspace(db, workspaceId))) return;
             const storage = createStorage();
             const { data } = await storage.download(file.storagePath);
             const content = await streamToString(data);
