@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useCallback, use } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useState, useCallback, use } from "react";
+import { useDropzone } from "react-dropzone";
 import {
   Upload,
   Lock,
@@ -9,18 +9,19 @@ import {
   CheckCircle,
   Loader2,
   X,
-} from 'lucide-react';
-import { Logo } from '@/assets/logo';
-import { trpc } from '@/lib/trpc/client';
-import { cn, formatBytes } from '@/lib/utils';
-import { FileIcon } from '@/components/file-icon';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+  HardDrive,
+} from "lucide-react";
+import { Logo } from "@/assets/logo";
+import { trpc } from "@/lib/trpc/client";
+import { cn, formatBytes } from "@/lib/utils";
+import { FileIcon } from "@/components/file-icon";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 interface UploadEntry {
   file: File;
-  status: 'pending' | 'uploading' | 'done' | 'error';
+  status: "pending" | "uploading" | "done" | "error";
   error?: string;
 }
 
@@ -30,7 +31,7 @@ export default function PublicUploadPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = use(params);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [enteredPassword, setEnteredPassword] = useState<string | undefined>();
   const [files, setFiles] = useState<UploadEntry[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -42,21 +43,24 @@ export default function PublicUploadPage({
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      if (data && 'allowedMimeTypes' in data && data.allowedMimeTypes) {
+      if (data && "allowedMimeTypes" in data && data.allowedMimeTypes) {
         const filtered = acceptedFiles.filter((f) =>
           data.allowedMimeTypes!.includes(f.type),
         );
         if (filtered.length !== acceptedFiles.length) {
-          toast.error('Some files were rejected due to type restrictions');
+          toast.error("Some files were rejected due to type restrictions");
         }
         setFiles((prev) => [
           ...prev,
-          ...filtered.map((file) => ({ file, status: 'pending' as const })),
+          ...filtered.map((file) => ({ file, status: "pending" as const })),
         ]);
       } else {
         setFiles((prev) => [
           ...prev,
-          ...acceptedFiles.map((file) => ({ file, status: 'pending' as const })),
+          ...acceptedFiles.map((file) => ({
+            file,
+            status: "pending" as const,
+          })),
         ]);
       }
     },
@@ -66,7 +70,7 @@ export default function PublicUploadPage({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     maxSize:
-      data && 'maxFileSize' in data && data.maxFileSize
+      data && "maxFileSize" in data && data.maxFileSize
         ? data.maxFileSize
         : undefined,
   });
@@ -74,38 +78,43 @@ export default function PublicUploadPage({
   const handleUpload = async () => {
     setUploading(true);
 
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < files.length; i++) {
       const entry = files[i]!;
-      if (entry.status !== 'pending') continue;
+      if (entry.status !== "pending") continue;
 
       setFiles((prev) =>
-        prev.map((f, idx) => (idx === i ? { ...f, status: 'uploading' } : f)),
+        prev.map((f, idx) => (idx === i ? { ...f, status: "uploading" } : f)),
       );
 
       try {
         const formData = new FormData();
-        formData.append('file', entry.file);
-        formData.append('token', token);
-        if (enteredPassword) formData.append('password', enteredPassword);
+        formData.append("file", entry.file);
+        formData.append("token", token);
+        if (enteredPassword) formData.append("password", enteredPassword);
 
-        const res = await fetch('/api/upload/public', {
-          method: 'POST',
+        const res = await fetch("/api/upload/public", {
+          method: "POST",
           body: formData,
         });
 
         if (!res.ok) {
           const d = await res.json();
-          throw new Error(d.error ?? 'Upload failed');
+          throw new Error(d.error ?? "Upload failed");
         }
 
+        successCount++;
         setFiles((prev) =>
-          prev.map((f, idx) => (idx === i ? { ...f, status: 'done' } : f)),
+          prev.map((f, idx) => (idx === i ? { ...f, status: "done" } : f)),
         );
       } catch (err) {
+        errorCount++;
         setFiles((prev) =>
           prev.map((f, idx) =>
             idx === i
-              ? { ...f, status: 'error', error: (err as Error).message }
+              ? { ...f, status: "error", error: (err as Error).message }
               : f,
           ),
         );
@@ -113,7 +122,13 @@ export default function PublicUploadPage({
     }
 
     setUploading(false);
-    toast.success('Upload complete');
+    if (errorCount > 0 && successCount === 0) {
+      toast.error("Upload failed");
+    } else if (errorCount > 0) {
+      toast.warning(`${successCount} uploaded, ${errorCount} failed`);
+    } else if (successCount > 0) {
+      toast.success("Upload complete");
+    }
   };
 
   if (isLoading) {
@@ -124,7 +139,7 @@ export default function PublicUploadPage({
     );
   }
 
-  if (data && 'requiresPassword' in data && data.requiresPassword) {
+  if (data && "requiresPassword" in data && data.requiresPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-sm rounded-lg border bg-card p-6">
@@ -156,7 +171,7 @@ export default function PublicUploadPage({
     );
   }
 
-  if (data && 'error' in data) {
+  if (data && "error" in data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-full max-w-sm rounded-lg border bg-card p-6 text-center">
@@ -168,7 +183,7 @@ export default function PublicUploadPage({
     );
   }
 
-  const pendingCount = files.filter((f) => f.status === 'pending').length;
+  const pendingCount = files.filter((f) => f.status === "pending").length;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
@@ -182,21 +197,21 @@ export default function PublicUploadPage({
         </div>
 
         <h1 className="title text-lg mb-1">
-          {data && 'name' in data ? data.name : 'Upload'}
+          {data && "name" in data ? data.name : "Upload"}
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
-          {data && 'remainingUploads' in data && data.remainingUploads !== null
+          {data && "remainingUploads" in data && data.remainingUploads !== null
             ? `${data.remainingUploads} uploads remaining`
-            : 'Drop files to upload'}
+            : "Drop files to upload"}
         </p>
 
         <div
           {...getRootProps()}
           className={cn(
-            'border-2 border-dashed rounded-sm p-8 text-center cursor-pointer transition-colors mb-4',
+            "border-2 border-dashed rounded-sm p-8 text-center cursor-pointer transition-colors mb-4",
             isDragActive
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/50',
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/50",
           )}
         >
           <input {...getInputProps()} />
@@ -224,16 +239,16 @@ export default function PublicUploadPage({
                 <span className="text-xs font-medium text-muted-foreground shrink-0">
                   {formatBytes(entry.file.size)}
                 </span>
-                {entry.status === 'uploading' && (
+                {entry.status === "uploading" && (
                   <Loader2 className="size-3.5 text-primary animate-spin shrink-0" />
                 )}
-                {entry.status === 'done' && (
+                {entry.status === "done" && (
                   <CheckCircle className="size-3.5 text-green-500 shrink-0" />
                 )}
-                {entry.status === 'error' && (
+                {entry.status === "error" && (
                   <AlertCircle className="size-3.5 text-destructive shrink-0" />
                 )}
-                {entry.status === 'pending' && !uploading && (
+                {entry.status === "pending" && !uploading && (
                   <button
                     onClick={() =>
                       setFiles((prev) => prev.filter((_, idx) => idx !== i))
@@ -249,7 +264,11 @@ export default function PublicUploadPage({
         )}
 
         {pendingCount > 0 && (
-          <Button onClick={handleUpload} disabled={uploading} className="w-full">
+          <Button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="w-full"
+          >
             {uploading ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" />
@@ -258,7 +277,7 @@ export default function PublicUploadPage({
             ) : (
               <>
                 <Upload className="size-3.5" />
-                Upload {pendingCount} {pendingCount === 1 ? 'file' : 'files'}
+                Upload {pendingCount} {pendingCount === 1 ? "file" : "files"}
               </>
             )}
           </Button>

@@ -1,28 +1,28 @@
-'use client';
+"use client";
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Upload, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { trpc } from '@/lib/trpc/client';
-import { cn, formatBytes } from '@/lib/utils';
-import { FileIcon } from '@/components/file-icon';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { useWorkspace } from '@/lib/workspace-context';
-import { uploadFile } from '@/lib/upload';
-import { toast } from 'sonner';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useDropzone } from "react-dropzone";
+import { Upload, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { trpc } from "@/lib/trpc/client";
+import { cn, formatBytes } from "@/lib/utils";
+import { FileIcon } from "@/components/file-icon";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { useWorkspace } from "@/lib/workspace-context";
+import { uploadFile } from "@/lib/upload";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog';
-import { MAX_FILE_SIZE } from '@openstore/common';
+} from "@/components/ui/dialog";
+import { MAX_FILE_SIZE } from "@openstore/common";
 
 interface UploadFileEntry {
   file: File;
-  status: 'pending' | 'uploading' | 'done' | 'error';
+  status: "pending" | "uploading" | "done" | "error";
   error?: string;
   progress?: number;
 }
@@ -51,16 +51,23 @@ export function UploadDialog({
 
   // Populate files when opened with initialFiles (from desktop drop)
   useEffect(() => {
-    if (open && initialFiles && initialFiles.length > 0 && initialFiles !== initializedFor) {
+    if (
+      open &&
+      initialFiles &&
+      initialFiles.length > 0 &&
+      initialFiles !== initializedFor
+    ) {
       setInitializedFor(initialFiles);
-      setFiles(initialFiles.map((file) => ({ file, status: 'pending' as const })));
+      setFiles(
+        initialFiles.map((file) => ({ file, status: "pending" as const })),
+      );
     }
   }, [open, initialFiles, initializedFor]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map((file) => ({
       file,
-      status: 'pending' as const,
+      status: "pending" as const,
     }));
     setFiles((prev) => [...prev, ...newFiles]);
   }, []);
@@ -84,14 +91,17 @@ export function UploadDialog({
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < files.length; i++) {
       const entry = files[i]!;
-      if (entry.status !== 'pending') continue;
+      if (entry.status !== "pending") continue;
       if (controller.signal.aborted) break;
 
       setFiles((prev) =>
         prev.map((f, idx) =>
-          idx === i ? { ...f, status: 'uploading', progress: 0 } : f,
+          idx === i ? { ...f, status: "uploading", progress: 0 } : f,
         ),
       );
 
@@ -115,17 +125,19 @@ export function UploadDialog({
           abortSignal: controller.signal,
         });
 
+        successCount++;
         setFiles((prev) =>
           prev.map((f, idx) =>
-            idx === i ? { ...f, status: 'done', progress: 100 } : f,
+            idx === i ? { ...f, status: "done", progress: 100 } : f,
           ),
         );
       } catch (err) {
         if (controller.signal.aborted) break;
+        errorCount++;
         setFiles((prev) =>
           prev.map((f, idx) =>
             idx === i
-              ? { ...f, status: 'error', error: (err as Error).message }
+              ? { ...f, status: "error", error: (err as Error).message }
               : f,
           ),
         );
@@ -137,7 +149,13 @@ export function UploadDialog({
     utils.files.list.invalidate();
     utils.storage.usage.invalidate();
     if (!controller.signal.aborted) {
-      toast.success('Upload complete');
+      if (errorCount > 0 && successCount === 0) {
+        toast.error("Upload failed");
+      } else if (errorCount > 0) {
+        toast.warning(`${successCount} uploaded, ${errorCount} failed`);
+      } else if (successCount > 0) {
+        toast.success("Upload complete");
+      }
     }
   };
 
@@ -153,7 +171,7 @@ export function UploadDialog({
     }
   };
 
-  const pendingCount = files.filter((f) => f.status === 'pending').length;
+  const pendingCount = files.filter((f) => f.status === "pending").length;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -168,18 +186,18 @@ export function UploadDialog({
         <div
           {...getRootProps()}
           className={cn(
-            'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+            "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
             isDragActive
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/50',
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/50",
           )}
         >
           <input {...getInputProps()} />
           <Upload className="size-6 mx-auto mb-2 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             {isDragActive
-              ? 'Drop files here...'
-              : 'Drop files here or click to browse'}
+              ? "Drop files here..."
+              : "Drop files here or click to browse"}
           </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
             Max {formatBytes(MAX_FILE_SIZE)} per file
@@ -206,13 +224,13 @@ export function UploadDialog({
                     {formatBytes(entry.file.size)}
                   </span>
 
-                  {entry.status === 'done' && (
+                  {entry.status === "done" && (
                     <CheckCircle className="size-3.5 text-green-500 shrink-0" />
                   )}
-                  {entry.status === 'error' && (
+                  {entry.status === "error" && (
                     <AlertCircle className="size-3.5 text-destructive shrink-0" />
                   )}
-                  {entry.status === 'pending' && !uploading && (
+                  {entry.status === "pending" && !uploading && (
                     <button
                       onClick={() => removeFile(i)}
                       className="size-4 flex items-center justify-center hover:bg-muted rounded-sm cursor-pointer"
@@ -223,9 +241,10 @@ export function UploadDialog({
                 </div>
 
                 {/* Progress bar for active uploads */}
-                {entry.status === 'uploading' && entry.progress !== undefined && (
-                  <Progress value={entry.progress} className="h-1" />
-                )}
+                {entry.status === "uploading" &&
+                  entry.progress !== undefined && (
+                    <Progress value={entry.progress} className="h-1" />
+                  )}
               </div>
             ))}
           </div>
@@ -234,7 +253,7 @@ export function UploadDialog({
         {pendingCount > 0 && !uploading && (
           <Button onClick={handleUpload} className="w-full">
             <Upload />
-            Upload {pendingCount} {pendingCount === 1 ? 'file' : 'files'}
+            Upload {pendingCount} {pendingCount === 1 ? "file" : "files"}
           </Button>
         )}
 

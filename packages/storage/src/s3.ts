@@ -8,9 +8,9 @@ import {
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl as awsGetSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { StorageProvider } from './interface';
+} from "@aws-sdk/client-s3";
+import { getSignedUrl as awsGetSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { StorageProvider } from "./interface";
 
 export class S3StorageAdapter implements StorageProvider {
   private client: S3Client;
@@ -20,13 +20,15 @@ export class S3StorageAdapter implements StorageProvider {
 
   constructor() {
     this.client = new S3Client({
-      region: process.env.AWS_REGION ?? 'us-east-1',
+      region: process.env.AWS_REGION ?? "us-east-1",
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
       },
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
-    this.bucket = process.env.S3_BUCKET ?? 'openstore';
+    this.bucket = process.env.S3_BUCKET ?? "openstore";
   }
 
   async upload(params: {
@@ -61,7 +63,7 @@ export class S3StorageAdapter implements StorageProvider {
     );
 
     return {
-      url: `https://${this.bucket}.s3.${process.env.AWS_REGION ?? 'us-east-1'}.amazonaws.com/${params.path}`,
+      url: `https://${this.bucket}.s3.${process.env.AWS_REGION ?? "us-east-1"}.amazonaws.com/${params.path}`,
       path: params.path,
     };
   }
@@ -80,7 +82,7 @@ export class S3StorageAdapter implements StorageProvider {
 
     return {
       data: response.Body!.transformToWebStream(),
-      contentType: response.ContentType ?? 'application/octet-stream',
+      contentType: response.ContentType ?? "application/octet-stream",
       size: response.ContentLength ?? 0,
     };
   }
@@ -139,17 +141,15 @@ export class S3StorageAdapter implements StorageProvider {
     contentType: string;
     size: number;
     expiresIn?: number;
-  }): Promise<{ url: string; method: 'PUT' }> {
+  }): Promise<{ url: string; method: "PUT" }> {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: params.path,
-      ContentType: params.contentType,
-      ContentLength: params.size,
     });
     const url = await awsGetSignedUrl(this.client, command, {
       expiresIn: params.expiresIn ?? 3600,
     });
-    return { url, method: 'PUT' };
+    return { url, method: "PUT" };
   }
 
   // ── Multipart upload (large files) ────────────────────────────────────
