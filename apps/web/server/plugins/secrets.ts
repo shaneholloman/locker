@@ -11,8 +11,7 @@ const DEV_PLUGIN_SECRET = 'openstore-plugin-dev-secret';
 function getPluginEncryptionKey(): Buffer {
   const secret =
     process.env.PLUGIN_ENCRYPTION_SECRET ??
-    process.env.S3_API_KEY_ENCRYPTION_SECRET ??
-    process.env.BETTER_AUTH_SECRET;
+    process.env.S3_API_KEY_ENCRYPTION_SECRET;
 
   if (secret) {
     return createHash('sha256').update(secret).digest();
@@ -20,7 +19,9 @@ function getPluginEncryptionKey(): Buffer {
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'PLUGIN_ENCRYPTION_SECRET (or S3_API_KEY_ENCRYPTION_SECRET / BETTER_AUTH_SECRET) must be configured in production',
+      'PLUGIN_ENCRYPTION_SECRET must be configured in production. ' +
+        'Set this to a stable secret independent of BETTER_AUTH_SECRET so that ' +
+        'rotating your auth secret does not break stored plugin credentials.',
     );
   }
 

@@ -44,7 +44,11 @@ function getDbPath(workspaceId: string): string {
 function resetTimer(workspaceId: string, entry: StoreEntry): void {
   clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
+    const evicted = stores.get(workspaceId);
     stores.delete(workspaceId);
+    if (evicted) {
+      try { evicted.store.close(); } catch {}
+    }
     console.log(`[qmd] Closed idle store for workspace ${workspaceId}`);
   }, INACTIVITY_MS);
 }
@@ -169,6 +173,7 @@ export function getStoreCount(): number {
 export function closeAll(): void {
   for (const [id, entry] of stores) {
     clearTimeout(entry.timer);
+    try { entry.store.close(); } catch {}
     stores.delete(id);
   }
   console.log('[qmd] Closed all stores');

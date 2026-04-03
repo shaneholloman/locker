@@ -294,8 +294,11 @@ export const pluginsRouter = createRouter({
       installedRows.map((row) => row.id),
     );
 
-    return installedRows.map((row) => {
-      const manifest = parseManifestOrThrow(row.manifest);
+    const results = [];
+    for (const row of installedRows) {
+      const manifest = parseManifestSafe(row.manifest);
+      if (!manifest) continue; // Skip plugins with invalid manifests
+
       const config = normalizeConfig(row.config);
       const configuredSecretKeys = secretKeysByPlugin.get(row.id) ?? new Set();
       const missingConfigFields = missingRequiredConfigFields({
@@ -304,7 +307,7 @@ export const pluginsRouter = createRouter({
         configuredSecretKeys,
       });
 
-      return {
+      results.push({
         id: row.id,
         pluginSlug: row.pluginSlug,
         source: row.source,
@@ -316,8 +319,9 @@ export const pluginsRouter = createRouter({
         missingConfigFields,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-      };
-    });
+      });
+    }
+    return results;
   }),
 
   registerCustom: workspaceAdminProcedure

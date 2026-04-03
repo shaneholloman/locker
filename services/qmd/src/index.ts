@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { indexFile, deindexFile, search, getStoreCount, closeAll } from './store-manager.js';
 
 const PORT = parseInt(process.env.QMD_PORT || '9600', 10);
@@ -18,12 +18,16 @@ function json(res: ServerResponse, status: number, data: unknown): void {
   res.end(JSON.stringify(data));
 }
 
+const API_SECRET_HASH = API_SECRET
+  ? createHash('sha256').update(API_SECRET).digest()
+  : null;
+
 function isAuthenticated(req: IncomingMessage): boolean {
-  if (!API_SECRET) return true; // No secret configured = open (dev mode)
+  if (!API_SECRET_HASH) return true; // No secret configured = open (dev mode)
   const header = req.headers['authorization'] ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (token.length !== API_SECRET.length) return false;
-  return timingSafeEqual(Buffer.from(token), Buffer.from(API_SECRET));
+  const tokenHash = createHash('sha256').update(token).digest();
+  return timingSafeEqual(tokenHash, API_SECRET_HASH);
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
