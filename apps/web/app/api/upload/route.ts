@@ -16,6 +16,7 @@ import {
   qmdClient,
   streamToString,
 } from "../../../server/plugins/handlers/qmd-client";
+import { ftsClient } from "../../../server/plugins/handlers/fts-client";
 import { invalidateWorkspaceVfsSnapshot } from "../../../server/vfs/locker-vfs";
 
 export async function POST(req: NextRequest) {
@@ -233,25 +234,58 @@ export async function POST(req: NextRequest) {
     .set({ storageUsed: sql`${workspaces.storageUsed} + ${billedSize}` })
     .where(eq(workspaces.id, workspaceId));
 
-  // Fire-and-forget: index file for QMD search (only if plugin is active for this workspace)
-  if (
-    newFile &&
-    qmdClient.isConfigured() &&
-    qmdClient.shouldIndex(newFile.mimeType)
-  ) {
+  // Fire-and-forget: index file for search plugins
+  if (newFile) {
     void (async () => {
-      try {
-        if (!(await qmdClient.isActiveForWorkspace(db, workspaceId))) return;
-        const dl = await storage.download(newFile.storagePath);
-        const content = await streamToString(dl.data);
-        await qmdClient.indexFile({
-          workspaceId,
-          fileId: newFile.id,
-          fileName: newFile.name,
-          mimeType: newFile.mimeType,
-          content,
-        });
-      } catch {}
+      // Lazily fetch content only if at least one search plugin needs it
+      let content: string | undefined;
+
+      async function getContent(): Promise<string | undefined> {
+        if (content !== undefined) return content;
+        try {
+          const dl = await storage.download(newFile.storagePath);
+          content = await streamToString(dl.data);
+        } catch {
+          content = undefined;
+        }
+        return content;
+      }
+
+      // QMD semantic search
+      if (qmdClient.isConfigured() && qmdClient.shouldIndex(newFile.mimeType)) {
+        try {
+          if (await qmdClient.isActiveForWorkspace(db, workspaceId)) {
+            const text = await getContent();
+            if (text) {
+              await qmdClient.indexFile({
+                workspaceId,
+                fileId: newFile.id,
+                fileName: newFile.name,
+                mimeType: newFile.mimeType,
+                content: text,
+              });
+            }
+          }
+        } catch {}
+      }
+
+      // FTS5 full-text search
+      if (ftsClient.isConfigured() && ftsClient.shouldIndex(newFile.mimeType)) {
+        try {
+          if (await ftsClient.isActiveForWorkspace(db, workspaceId)) {
+            const text = await getContent();
+            if (text) {
+              await ftsClient.indexFile({
+                workspaceId,
+                fileId: newFile.id,
+                fileName: newFile.name,
+                mimeType: newFile.mimeType,
+                content: text,
+              });
+            }
+          }
+        } catch {}
+      }
     })();
   }
 

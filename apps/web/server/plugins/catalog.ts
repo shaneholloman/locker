@@ -25,6 +25,28 @@ const builtinPluginManifestsRaw: PluginManifest[] = [
     configFields: [],
   },
   {
+    slug: "fts-search",
+    name: "Full-Text Search",
+    description:
+      "Lightweight full-text file content search using SQLite FTS5. Runs entirely in-process with minimal memory — no external service or ML model required.",
+    version: "0.1.0",
+    developer: "Locker",
+    source: "official",
+    permissions: ["files.read", "search.read", "search.enhance"],
+    capabilities: ["workspace_search", "file_actions"],
+    actions: [
+      {
+        id: "fts.reindex-file",
+        label: "Refresh Search Index",
+        description:
+          "Re-index this file for full-text search so queries match the latest content.",
+        target: "file",
+        requiresPermissions: ["files.read", "search.enhance"],
+      },
+    ],
+    configFields: [],
+  },
+  {
     slug: "google-drive-sync",
     name: "Google Drive Sync",
     description:

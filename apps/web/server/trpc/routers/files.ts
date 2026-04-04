@@ -21,6 +21,7 @@ import {
 } from "@locker/common";
 import { enhanceSearchResultsWithPlugins } from "../../plugins/search";
 import { qmdClient } from "../../plugins/handlers/qmd-client";
+import { ftsClient } from "../../plugins/handlers/fts-client";
 import { invalidateWorkspaceVfsSnapshot } from "../../vfs/locker-vfs";
 
 export const filesRouter = createRouter({
@@ -40,8 +41,10 @@ export const filesRouter = createRouter({
       const conditions = [eq(files.workspaceId, ctx.workspaceId)];
 
       if (search) {
-        // Fetch QMD content-matched file IDs in parallel with building the query
-        let qmdFileIds: string[] = [];
+        // Fetch content-matched file IDs from search plugins
+        const contentFileIds = new Set<string>();
+
+        // QMD semantic search
         if (qmdClient.isConfigured()) {
           try {
             const qmdResults = await qmdClient.search({
@@ -49,15 +52,29 @@ export const filesRouter = createRouter({
               query: search,
               limit: pageSize,
             });
-            qmdFileIds = qmdResults.map((r) => r.fileId);
-          } catch {
-            // Fall through — name-only search still works
-          }
+            for (const r of qmdResults) contentFileIds.add(r.fileId);
+          } catch {}
+        }
+
+        // FTS5 full-text search
+        if (ftsClient.isConfigured()) {
+          try {
+            if (await ftsClient.isActiveForWorkspace(db, ctx.workspaceId)) {
+              const ftsResults = await ftsClient.search({
+                workspaceId: ctx.workspaceId,
+                query: search,
+                limit: pageSize,
+              });
+              for (const r of ftsResults) contentFileIds.add(r.fileId);
+            }
+          } catch {}
         }
 
         const nameMatch = ilike(files.name, `%${search}%`);
-        if (qmdFileIds.length > 0) {
-          conditions.push(or(nameMatch, inArray(files.id, qmdFileIds))!);
+        if (contentFileIds.size > 0) {
+          conditions.push(
+            or(nameMatch, inArray(files.id, [...contentFileIds]))!,
+          );
         } else {
           conditions.push(nameMatch);
         }
@@ -196,7 +213,7 @@ export const filesRouter = createRouter({
       const storage = await createStorageForFile(file.storageConfigId);
       await storage.delete(file.storagePath);
 
-      // De-index from QMD search (only if plugin is active for this workspace)
+      // De-index from search plugins
       if (qmdClient.isConfigured()) {
         void (async () => {
           try {
@@ -205,6 +222,20 @@ export const filesRouter = createRouter({
             )
               return;
             await qmdClient.deindexFile({
+              workspaceId: ctx.workspaceId,
+              fileId: file.id,
+            });
+          } catch {}
+        })();
+      }
+      if (ftsClient.isConfigured()) {
+        void (async () => {
+          try {
+            if (
+              !(await ftsClient.isActiveForWorkspace(ctx.db, ctx.workspaceId))
+            )
+              return;
+            await ftsClient.deindexFile({
               workspaceId: ctx.workspaceId,
               fileId: file.id,
             });
@@ -235,6 +266,9 @@ export const filesRouter = createRouter({
       const qmdActive =
         qmdClient.isConfigured() &&
         (await qmdClient.isActiveForWorkspace(ctx.db, ctx.workspaceId));
+      const ftsActive =
+        ftsClient.isConfigured() &&
+        (await ftsClient.isActiveForWorkspace(ctx.db, ctx.workspaceId));
 
       for (const id of input.ids) {
         const [file] = await ctx.db
@@ -247,6 +281,14 @@ export const filesRouter = createRouter({
           await storage.delete(file.storagePath);
           if (qmdActive) {
             void qmdClient
+              .deindexFile({
+                workspaceId: ctx.workspaceId,
+                fileId: file.id,
+              })
+              .catch(() => {});
+          }
+          if (ftsActive) {
+            void ftsClient
               .deindexFile({
                 workspaceId: ctx.workspaceId,
                 fileId: file.id,
