@@ -6,7 +6,9 @@ import {
   varchar,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { workspaces } from "./workspaces";
 
@@ -29,6 +31,9 @@ export const workspaceStorageConfigs = pgTable(
   },
   (table) => [
     index("workspace_storage_configs_workspace_id_idx").on(table.workspaceId),
+    uniqueIndex("workspace_storage_configs_active_workspace_idx")
+      .on(table.workspaceId)
+      .where(sql`"is_active" = true`),
   ],
 );
 
