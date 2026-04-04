@@ -28,6 +28,22 @@ interface StoreEntry {
 const stores = new Map<string, StoreEntry>();
 const pendingOpens = new Map<string, Promise<QMDStore>>();
 
+// Simple TTL cache for search results
+const SEARCH_CACHE_TTL_MS = 60_000; // 1 minute
+interface CachedSearch {
+  results: Array<{ fileId: string; score: number; snippet?: string }>;
+  expiresAt: number;
+}
+const searchCache = new Map<string, CachedSearch>();
+
+function searchCacheKey(
+  workspaceId: string,
+  query: string,
+  limit: number,
+): string {
+  return `${workspaceId}:${limit}:${query}`;
+}
+
 function isIndexable(mimeType: string): boolean {
   return (
     INDEXABLE_MIME_PREFIXES.some((p) => mimeType.startsWith(p)) ||
@@ -139,6 +155,7 @@ export async function indexFile(params: {
     await store.embed();
   });
 
+  invalidateCache(params.workspaceId);
   console.log(`[qmd] Indexed file ${params.fileId} (${params.fileName})`);
 }
 
@@ -154,6 +171,7 @@ export async function deindexFile(params: {
     await store.internal.cleanupOrphanedContent();
   });
 
+  invalidateCache(params.workspaceId);
   console.log(`[qmd] De-indexed file ${params.fileId}`);
 }
 
@@ -163,20 +181,51 @@ export async function search(params: {
   query: string;
   limit?: number;
 }): Promise<Array<{ fileId: string; score: number; snippet?: string }>> {
-  const store = await getStore(params.workspaceId);
-
   const limit = params.limit ?? 20;
+  const cacheKey = searchCacheKey(params.workspaceId, params.query, limit);
+
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.results;
+  }
+
+  const store = await getStore(params.workspaceId);
 
   let results: Awaited<ReturnType<typeof store.search>>;
   await withMutex(params.workspaceId, async () => {
     results = await store.search({ query: params.query, limit });
   });
 
-  return results!.slice(0, limit).map((r) => ({
+  const mapped = results!.slice(0, limit).map((r) => ({
     fileId: r.path,
     score: r.score ?? 1,
     snippet: r.content?.slice(0, 200),
   }));
+
+  searchCache.set(cacheKey, {
+    results: mapped,
+    expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+  });
+
+  return mapped;
+}
+
+function invalidateCache(workspaceId: string): void {
+  for (const key of searchCache.keys()) {
+    if (key.startsWith(`${workspaceId}:`)) {
+      searchCache.delete(key);
+    }
+  }
+}
+
+/** Pre-load the embedding model so the first real search is fast. */
+export async function warmup(): Promise<void> {
+  const dbPath = join(QMD_DATA_DIR, "_warmup", "index.sqlite");
+  mkdirSync(join(QMD_DATA_DIR, "_warmup"), { recursive: true });
+  const store = await createStore({ dbPath });
+  await store.search({ query: "warmup", limit: 1 }).catch(() => {});
+  store.close();
+  console.log("[qmd] Model warmup complete");
 }
 
 export function getStoreCount(): number {
