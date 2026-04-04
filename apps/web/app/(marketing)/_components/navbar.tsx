@@ -17,25 +17,25 @@ export function Navbar() {
   const [hasScrolled, setHasScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    let ticking = false;
-    const updateScrollState = () => {
-      setHasScrolled(window.scrollY > 50);
-      ticking = false;
-    };
-    const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(updateScrollState);
-        ticking = true;
-      }
-    };
+  // useEffect(() => {
+  //   let ticking = false;
+  //   const updateScrollState = () => {
+  //     setHasScrolled(window.scrollY > 50);
+  //     ticking = false;
+  //   };
+  //   const handleScroll = () => {
+  //     if (!ticking) {
+  //       requestAnimationFrame(updateScrollState);
+  //       ticking = true;
+  //     }
+  //   };
 
-    // Check initial scroll position (e.g. back/forward navigation on mobile)
-    updateScrollState();
+  //   // Check initial scroll position (e.g. back/forward navigation on mobile)
+  //   updateScrollState();
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  //   window.addEventListener("scroll", handleScroll, { passive: true });
+  //   return () => window.removeEventListener("scroll", handleScroll);
+  // }, []);
 
   return (
     <div className="fixed inset-x-0 top-0 z-50">

@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { HardDriveIcon } from "lucide-react";
 import { FolderSvg } from "../_components/folder-svg";
-import { FadeIn } from "../_components/fade-in";
 
 const providers = [
   {
@@ -44,7 +44,13 @@ export function Storage() {
   return (
     <section id="storage" className="flex flex-col bg-muted">
       <div className="grid-layout w-full py-20">
-        <FadeIn className="col-span-full mb-10">
+        <motion.div
+          className="col-span-full mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="mkt-label text-primary">Bring your own backend</p>
           <h2 className="mkt-heading mt-2 text-foreground">
             One env var. Any storage provider.
@@ -61,13 +67,16 @@ export function Storage() {
             and you&apos;re done. Switch providers anytime without touching a
             line of code.
           </p>
-        </FadeIn>
+        </motion.div>
 
         {providers.map((provider, index) => (
-          <FadeIn
+          <motion.div
             key={provider.name}
             className="col-span-full md:col-span-6 lg:col-span-3"
-            delay={index * 0.08}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.4, delay: index * 0.08 }}
           >
             <div
               className={cn(
@@ -95,7 +104,7 @@ export function Storage() {
                 {provider.description}
               </p>
             </div>
-          </FadeIn>
+          </motion.div>
         ))}
       </div>
 

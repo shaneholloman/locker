@@ -3,10 +3,10 @@
 import { ArrowRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
+import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { GITHUB_URL } from "@/constants/app";
-import { FadeIn } from "../_components/fade-in";
 
 const faqItems = [
   {
@@ -88,9 +88,15 @@ export function Faq() {
   return (
     <section id="faq" className="flex flex-col bg-mkt-dark">
       <div className="grid-layout w-full py-20">
-        <FadeIn className="col-span-full">
+        <motion.div
+          className="col-span-full"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <h2 className="mkt-heading text-white">Frequently Asked Questions</h2>
-        </FadeIn>
+        </motion.div>
 
         <div className="col-span-full mt-4">
           {faqItems.map((item) => (
@@ -104,7 +110,13 @@ export function Faq() {
         </div>
 
         {/* Final CTA */}
-        <FadeIn className="col-span-full mt-14 flex flex-col items-center gap-5 text-center">
+        <motion.div
+          className="col-span-full mt-14 flex flex-col items-center gap-5 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.5 }}
+        >
           <h2 className="mkt-heading text-white">Ready to own your files?</h2>
           <p className="mkt-body max-w-lg text-balance text-white/50">
             Deploy Locker in minutes and take back control of your file storage.
@@ -127,7 +139,7 @@ export function Faq() {
               </Button>
             </Link>
           </div>
-        </FadeIn>
+        </motion.div>
       </div>
     </section>
   );

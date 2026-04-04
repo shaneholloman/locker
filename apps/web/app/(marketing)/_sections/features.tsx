@@ -8,9 +8,9 @@ import {
   UsersIcon,
   KeyIcon,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { FolderSvg } from "../_components/folder-svg";
-import { FadeIn } from "../_components/fade-in";
 
 const features = [
   {
@@ -55,7 +55,13 @@ export function Features() {
   return (
     <section id="features" className="flex flex-col bg-background">
       <div className="grid-layout w-full py-20">
-        <FadeIn className="col-span-full mb-10">
+        <motion.div
+          className="col-span-full mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5 }}
+        >
           <p className="mkt-label text-primary">Built for power users</p>
           <h2 className="mkt-heading mt-2 text-foreground">
             Everything you need to manage files
@@ -64,13 +70,16 @@ export function Features() {
             Locker gives you the full toolkit for file management, sharing, and
             collaboration&mdash;all self-hosted on your own terms.
           </p>
-        </FadeIn>
+        </motion.div>
 
         {features.map(({ title, icon: Icon, description }, index) => (
-          <FadeIn
+          <motion.div
             key={title}
             className="col-span-full flex gap-5 border-t-2 border-primary/15 pt-5 lg:col-span-6"
-            delay={index * 0.06}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.4, delay: index * 0.06 }}
           >
             <div
               className={cn(
@@ -84,7 +93,7 @@ export function Features() {
               <h3 className="mkt-subheading text-foreground">{title}</h3>
               <p className="mkt-body-sm text-muted-foreground">{description}</p>
             </div>
-          </FadeIn>
+          </motion.div>
         ))}
       </div>
 
