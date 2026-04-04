@@ -1,22 +1,22 @@
-import { createStore } from '@tobilu/qmd';
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createStore } from "@tobilu/qmd";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 type QMDStore = Awaited<ReturnType<typeof createStore>>;
 
-const QMD_DATA_DIR = process.env.QMD_DATA_DIR || './data/qmd';
+const QMD_DATA_DIR = process.env.QMD_DATA_DIR || "./data/qmd";
 const INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const INDEXABLE_MIME_PREFIXES = ['text/'];
+const INDEXABLE_MIME_PREFIXES = ["text/"];
 const INDEXABLE_MIME_TYPES = new Set([
-  'application/json',
-  'application/xml',
-  'application/javascript',
-  'application/typescript',
-  'application/pdf',
-  'application/rtf',
+  "application/json",
+  "application/xml",
+  "application/javascript",
+  "application/typescript",
+  "application/pdf",
+  "application/rtf",
 ]);
 
 interface StoreEntry {
@@ -38,7 +38,7 @@ function isIndexable(mimeType: string): boolean {
 function getDbPath(workspaceId: string): string {
   const dir = join(QMD_DATA_DIR, workspaceId);
   mkdirSync(dir, { recursive: true });
-  return join(dir, 'index.sqlite');
+  return join(dir, "index.sqlite");
 }
 
 function resetTimer(workspaceId: string, entry: StoreEntry): void {
@@ -47,7 +47,9 @@ function resetTimer(workspaceId: string, entry: StoreEntry): void {
     const evicted = stores.get(workspaceId);
     stores.delete(workspaceId);
     if (evicted) {
-      try { evicted.store.close(); } catch {}
+      try {
+        evicted.store.close();
+      } catch {}
     }
     console.log(`[qmd] Closed idle store for workspace ${workspaceId}`);
   }, INACTIVITY_MS);
@@ -66,7 +68,7 @@ async function getStore(workspaceId: string): Promise<QMDStore> {
 
   const opening = (async () => {
     const dbPath = getDbPath(workspaceId);
-    const store = await createStore({ database: dbPath });
+    const store = await createStore({ dbPath });
 
     const entry: StoreEntry = {
       store,
@@ -88,13 +90,19 @@ async function getStore(workspaceId: string): Promise<QMDStore> {
   }
 }
 
-function withMutex(workspaceId: string, fn: () => Promise<void>): Promise<void> {
+function withMutex(
+  workspaceId: string,
+  fn: () => Promise<void>,
+): Promise<void> {
   const entry = stores.get(workspaceId);
   if (!entry) return fn();
 
   const prev = entry.mutex;
   const next = prev.then(fn, fn);
-  entry.mutex = next.then(() => {}, () => {});
+  entry.mutex = next.then(
+    () => {},
+    () => {},
+  );
   return next;
 }
 
@@ -116,12 +124,12 @@ export async function indexFile(params: {
   const store = await getStore(params.workspaceId);
 
   await withMutex(params.workspaceId, async () => {
-    const hash = createHash('sha256').update(params.content).digest('hex');
+    const hash = createHash("sha256").update(params.content).digest("hex");
     const now = new Date();
 
     await store.internal.insertContent(hash, params.content, now);
     await store.internal.insertDocument(
-      'workspace',
+      "workspace",
       params.fileId,
       params.fileName,
       hash,
@@ -141,7 +149,7 @@ export async function deindexFile(params: {
   const store = await getStore(params.workspaceId);
 
   await withMutex(params.workspaceId, async () => {
-    await store.internal.deactivateDocument('workspace', params.fileId);
+    await store.internal.deactivateDocument("workspace", params.fileId);
     await store.internal.deleteInactiveDocuments();
     await store.internal.cleanupOrphanedContent();
   });
@@ -157,13 +165,11 @@ export async function search(params: {
   const store = await getStore(params.workspaceId);
   const results = await store.search(params.query);
 
-  return results
-    .slice(0, params.limit ?? 20)
-    .map((r) => ({
-      fileId: r.path,
-      score: r.score ?? 1,
-      snippet: r.content?.slice(0, 200),
-    }));
+  return results.slice(0, params.limit ?? 20).map((r) => ({
+    fileId: r.path,
+    score: r.score ?? 1,
+    snippet: r.content?.slice(0, 200),
+  }));
 }
 
 export function getStoreCount(): number {
@@ -173,8 +179,10 @@ export function getStoreCount(): number {
 export function closeAll(): void {
   for (const [id, entry] of stores) {
     clearTimeout(entry.timer);
-    try { entry.store.close(); } catch {}
+    try {
+      entry.store.close();
+    } catch {}
     stores.delete(id);
   }
-  console.log('[qmd] Closed all stores');
+  console.log("[qmd] Closed all stores");
 }
