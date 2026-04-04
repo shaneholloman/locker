@@ -86,9 +86,9 @@ export function CommandSearch() {
   // Scroll selected item into view
   useEffect(() => {
     if (!resultsRef.current) return;
-    const el = resultsRef.current.children[selectedIndex] as
-      | HTMLElement
-      | undefined;
+    const el = resultsRef.current.querySelector(
+      `[data-result-index="${selectedIndex}"]`,
+    ) as HTMLElement | null;
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
@@ -216,6 +216,7 @@ export function CommandSearch() {
                       return (
                         <button
                           key={file.id}
+                          data-result-index={index}
                           className={cn(
                             "w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer",
                             isSelected ? "bg-accent" : "hover:bg-muted/50",

@@ -151,8 +151,39 @@ export const filesRouter = createRouter({
       const { db } = ctx;
       const { query } = input;
 
-      const ftsMap = new Map<string, { snippet?: string; score: number }>();
+      // Collect content-matched file IDs with snippets/scores
+      const contentMap = new Map<string, { snippet?: string; score: number }>();
 
+      // QMD semantic search
+      const qmdEndpoint = await resolvePluginEndpoint(
+        db,
+        ctx.workspaceId,
+        "qmd-search",
+        {
+          serviceUrl: process.env.QMD_SERVICE_URL,
+          apiSecret: process.env.QMD_API_SECRET,
+        },
+      );
+      if (qmdEndpoint) {
+        try {
+          const qmdResults = await qmdClient.search(
+            {
+              workspaceId: ctx.workspaceId,
+              query,
+              limit: 20,
+            },
+            qmdEndpoint,
+          );
+          for (const r of qmdResults) {
+            contentMap.set(r.fileId, {
+              snippet: r.snippet,
+              score: r.score,
+            });
+          }
+        } catch {}
+      }
+
+      // FTS full-text search
       const ftsEndpoint = await resolvePluginEndpoint(
         db,
         ctx.workspaceId,
@@ -173,7 +204,14 @@ export const filesRouter = createRouter({
             ftsEndpoint,
           );
           for (const r of ftsResults) {
-            ftsMap.set(r.fileId, { snippet: r.snippet, score: r.score });
+            // Keep whichever source gave a higher score
+            const existing = contentMap.get(r.fileId);
+            if (!existing || r.score > existing.score) {
+              contentMap.set(r.fileId, {
+                snippet: r.snippet ?? existing?.snippet,
+                score: r.score,
+              });
+            }
           }
         } catch {}
       }
@@ -190,32 +228,35 @@ export const filesRouter = createRouter({
         .limit(20);
 
       const nameIds = new Set(nameMatches.map((f) => f.id));
-      const ftsOnlyIds = [...ftsMap.keys()].filter((id) => !nameIds.has(id));
+      const contentOnlyIds = [...contentMap.keys()].filter(
+        (id) => !nameIds.has(id),
+      );
 
-      let ftsOnlyFiles: typeof nameMatches = [];
-      if (ftsOnlyIds.length > 0) {
-        ftsOnlyFiles = await db
+      let contentOnlyFiles: typeof nameMatches = [];
+      if (contentOnlyIds.length > 0) {
+        contentOnlyFiles = await db
           .select()
           .from(files)
           .where(
             and(
               eq(files.workspaceId, ctx.workspaceId),
-              inArray(files.id, ftsOnlyIds),
+              inArray(files.id, contentOnlyIds),
             ),
           );
       }
 
-      const allFiles = [...nameMatches, ...ftsOnlyFiles];
+      const allFiles = [...nameMatches, ...contentOnlyFiles];
       const results = allFiles.map((f) => ({
         ...f,
-        snippet: ftsMap.get(f.id)?.snippet ?? null,
-        ftsScore: ftsMap.get(f.id)?.score ?? null,
+        snippet: contentMap.get(f.id)?.snippet ?? null,
+        contentScore: contentMap.get(f.id)?.score ?? null,
       }));
 
       results.sort((a, b) => {
-        if (a.ftsScore && !b.ftsScore) return -1;
-        if (!a.ftsScore && b.ftsScore) return 1;
-        if (a.ftsScore && b.ftsScore) return b.ftsScore - a.ftsScore;
+        if (a.contentScore && !b.contentScore) return -1;
+        if (!a.contentScore && b.contentScore) return 1;
+        if (a.contentScore && b.contentScore)
+          return b.contentScore - a.contentScore;
         return a.name.localeCompare(b.name);
       });
 

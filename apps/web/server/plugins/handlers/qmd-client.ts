@@ -89,10 +89,10 @@ export const qmdClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<void> {
-    const url = endpoint?.serviceUrl ?? QMD_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : QMD_SERVICE_URL;
     if (!url) return;
 
-    const secret = endpoint?.apiSecret ?? QMD_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : QMD_API_SECRET;
     const res = await fetch(`${url}/index`, {
       method: "POST",
       headers: buildHeaders(secret),
@@ -114,10 +114,10 @@ export const qmdClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<Array<{ fileId: string; score: number; snippet?: string }>> {
-    const url = endpoint?.serviceUrl ?? QMD_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : QMD_SERVICE_URL;
     if (!url) return [];
 
-    const secret = endpoint?.apiSecret ?? QMD_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : QMD_API_SECRET;
     const res = await fetch(`${url}/search`, {
       method: "POST",
       headers: buildHeaders(secret),
@@ -139,10 +139,10 @@ export const qmdClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<void> {
-    const url = endpoint?.serviceUrl ?? QMD_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : QMD_SERVICE_URL;
     if (!url) return;
 
-    const secret = endpoint?.apiSecret ?? QMD_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : QMD_API_SECRET;
     await fetch(`${url}/deindex`, {
       method: "POST",
       headers: buildHeaders(secret),

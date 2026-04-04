@@ -42,11 +42,14 @@ export async function resolvePluginEndpoint(
       ? (plugin.config as Record<string, string | number | boolean | null>)
       : {};
 
-  const serviceUrl = (config.serviceUrl as string) || envDefaults.serviceUrl;
+  const customUrl = config.serviceUrl as string | undefined;
+  const serviceUrl = customUrl || envDefaults.serviceUrl;
   if (!serviceUrl) return null;
 
-  // Resolve apiSecret: prefer workspace-level secret, fall back to env var
-  let apiSecret = envDefaults.apiSecret;
+  const usingEnvUrl = !customUrl;
+
+  // Resolve apiSecret from the workspace plugin secrets table
+  let apiSecret: string | undefined;
   const secretRows = await db
     .select({
       encryptedValue: workspacePluginSecrets.encryptedValue,
@@ -64,6 +67,13 @@ export async function resolvePluginEndpoint(
     try {
       apiSecret = decryptPluginSecret(secretRows[0].encryptedValue);
     } catch {}
+  }
+
+  // Only fall back to the env-var secret when we are also using the
+  // env-var URL. This prevents leaking the global secret to an
+  // arbitrary workspace-configured endpoint.
+  if (!apiSecret && usingEnvUrl) {
+    apiSecret = envDefaults.apiSecret;
   }
 
   return { serviceUrl, apiSecret };

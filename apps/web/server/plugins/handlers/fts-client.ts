@@ -68,10 +68,10 @@ export const ftsClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<void> {
-    const url = endpoint?.serviceUrl ?? FTS_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : FTS_SERVICE_URL;
     if (!url) return;
 
-    const secret = endpoint?.apiSecret ?? FTS_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : FTS_API_SECRET;
     const res = await fetch(`${url}/index`, {
       method: "POST",
       headers: buildHeaders(secret),
@@ -93,10 +93,10 @@ export const ftsClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<Array<{ fileId: string; score: number; snippet?: string }>> {
-    const url = endpoint?.serviceUrl ?? FTS_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : FTS_SERVICE_URL;
     if (!url) return [];
 
-    const secret = endpoint?.apiSecret ?? FTS_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : FTS_API_SECRET;
     const res = await fetch(`${url}/search`, {
       method: "POST",
       headers: buildHeaders(secret),
@@ -118,10 +118,10 @@ export const ftsClient = {
     },
     endpoint?: EndpointConfig,
   ): Promise<void> {
-    const url = endpoint?.serviceUrl ?? FTS_SERVICE_URL;
+    const url = endpoint ? endpoint.serviceUrl : FTS_SERVICE_URL;
     if (!url) return;
 
-    const secret = endpoint?.apiSecret ?? FTS_API_SECRET;
+    const secret = endpoint ? endpoint.apiSecret : FTS_API_SECRET;
     await fetch(`${url}/deindex`, {
       method: "POST",
       headers: buildHeaders(secret),
