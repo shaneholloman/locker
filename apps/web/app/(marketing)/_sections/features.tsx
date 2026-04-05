@@ -7,6 +7,7 @@ import {
   ShieldCheckIcon,
   UsersIcon,
   KeyIcon,
+  SearchIcon,
 } from "lucide-react";
 // import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -21,10 +22,10 @@ const features = [
       "Swap between local filesystem, AWS S3, Cloudflare R2, or Vercel Blob with a single environment variable. Your data, your infrastructure.",
   },
   {
-    title: "Storage Quotas",
-    icon: GaugeIcon,
+    title: "Search Inside Images & PDFs",
+    icon: SearchIcon,
     description:
-      "Per-user storage limits with real-time usage tracking. Set limits per workspace and monitor consumption at a glance.",
+      "Find files by what's in them, not just the name. Locker transcribes images and PDFs into searchable text so every document is discoverable.",
   },
   {
     title: "Virtual Bash Shell",
