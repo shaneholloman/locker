@@ -149,7 +149,7 @@ const builtinPluginManifestsRaw: PluginManifest[] = [
     slug: "document-transcription",
     name: "Document Transcription",
     description:
-      "Generates searchable markdown descriptions of images and PDFs by sending them to an external AI/OCR service endpoint. The generated text is automatically indexed so non-text files become discoverable through search.",
+      "Generates searchable markdown descriptions of images and PDFs using AI. Uses the built-in Vercel AI Gateway by default, or can be pointed at any external AI/OCR service. The generated text is automatically indexed so non-text files become discoverable through search.",
     version: "0.1.0",
     developer: "Locker",
     source: "official",
@@ -170,15 +170,15 @@ const builtinPluginManifestsRaw: PluginManifest[] = [
         key: "serviceUrl",
         label: "Service URL",
         description:
-          "HTTP endpoint that accepts file content and returns markdown text. Must accept POST requests with the file as the request body.",
+          "Optional. HTTP endpoint that accepts file content and returns markdown text. When empty, the built-in AI Gateway is used.",
         type: "url",
-        required: true,
+        required: false,
       },
       {
         key: "apiKey",
         label: "API Key",
         description:
-          "Authentication key sent as a Bearer token in the Authorization header.",
+          "Optional. Sent as a Bearer token when using an external service URL. Not needed for the built-in AI Gateway.",
         type: "secret",
         required: false,
       },
