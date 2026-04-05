@@ -32,7 +32,7 @@ import {
 import * as pdfjs from "pdfjs-dist";
 
 if (typeof window !== "undefined") {
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 }
 
 /* ------------------------------------------------------------------ */
@@ -545,19 +545,19 @@ export function PDFViewer({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const next = new Set(visiblePages);
-
-        for (const entry of entries) {
-          const pageNum = Number.parseInt(
-            (entry.target as HTMLElement).dataset.page || "0",
-            10,
-          );
-          if (entry.isIntersecting) {
-            next.add(pageNum);
+        setVisiblePages((prev) => {
+          const next = new Set(prev);
+          for (const entry of entries) {
+            const pageNum = Number.parseInt(
+              (entry.target as HTMLElement).dataset.page || "0",
+              10,
+            );
+            if (entry.isIntersecting) {
+              next.add(pageNum);
+            }
           }
-        }
-
-        setVisiblePages(next);
+          return next;
+        });
 
         const visibleEntries = entries.filter((e) => e.isIntersecting);
         if (visibleEntries.length > 0) {
@@ -568,9 +568,11 @@ export function PDFViewer({
             (mostVisible.target as HTMLElement).dataset.page || "0",
             10,
           );
-          if (pageNum > 0 && pageNum !== currentPage) {
-            setCurrentPage(pageNum);
-            onPageChangeProp?.(pageNum);
+          if (pageNum > 0) {
+            setCurrentPage((cp) => {
+              if (pageNum !== cp) onPageChangeProp?.(pageNum);
+              return pageNum;
+            });
           }
         }
       },
@@ -588,7 +590,7 @@ export function PDFViewer({
     }
 
     return () => observer.disconnect();
-  }, [pages, currentPage, onPageChangeProp, visiblePages]);
+  }, [pages, onPageChangeProp]);
 
   /* ---- Scroll to page ---- */
   const scrollToPage = useCallback((pageNumber: number) => {

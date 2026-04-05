@@ -23,6 +23,17 @@ import { cn, formatBytes, formatDate, getFileExtension } from "@/lib/utils";
 import { FileIcon } from "@/components/file-icon";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RenameDialog } from "@/components/rename-dialog";
 import { ShareDialog } from "@/components/share-dialog";
@@ -278,14 +289,6 @@ export function FileViewer({ fileId }: { fileId: string }) {
     },
     [runPluginAction, fileId],
   );
-
-  const navigateBack = useCallback(() => {
-    if (file?.folderId) {
-      router.push(`/w/${workspace.slug}/folder/${file.folderId}`);
-    } else {
-      router.push(`/w/${workspace.slug}`);
-    }
-  }, [router, workspace.slug, file?.folderId]);
 
   /* ---- loading skeleton ---- */
   if (fileLoading) {
@@ -576,15 +579,36 @@ export function FileViewer({ fileId }: { fileId: string }) {
 
               <Separator className="!my-2" />
 
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-                size="sm"
-                onClick={() => deleteFile.mutate({ id: file.id })}
-              >
-                <Trash2 className="size-4" />
-                Delete
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                    size="sm"
+                  >
+                    <Trash2 className="size-4" />
+                    Delete
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete file</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete &ldquo;{file.name}
+                      &rdquo;? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => deleteFile.mutate({ id: file.id })}
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </aside>
         </div>
@@ -663,7 +687,7 @@ function PreviewArea({
     case "audio":
       return <AudioPreview url={previewUrl} file={file} />;
     case "pdf":
-      return <PdfPreview url={previewUrl} name={file.name} />;
+      return <PdfPreview url={previewUrl} />;
     case "markdown":
       return <MarkdownPreview content={textContent} name={file.name} />;
     case "text":
@@ -738,7 +762,7 @@ function AudioPreview({
 
 /* ---- PDF ---- */
 
-function PdfPreview({ url }: { url: string | null; name: string }) {
+function PdfPreview({ url }: { url: string | null }) {
   if (!url) return null;
   return (
     <div style={{ height: "100%" }}>
