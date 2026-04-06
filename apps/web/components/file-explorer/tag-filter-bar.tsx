@@ -17,7 +17,7 @@ export function TagFilterBar({
   if (tags.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+    <div className="flex items-center gap-2 overflow-x-auto py-1">
       <span className="text-xs text-muted-foreground shrink-0">Filter:</span>
       {tags.map((tag) => {
         const isActive = selectedTagIds.includes(tag.id);
