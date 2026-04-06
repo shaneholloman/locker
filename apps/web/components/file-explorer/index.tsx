@@ -18,6 +18,7 @@ import {
   FileText,
   Loader2,
   Tag,
+  File as FileLucide,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { formatBytes, formatDate } from "@/lib/utils";
@@ -47,7 +48,10 @@ import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import { isTextIndexable } from "@locker/common";
 import { TagBadge } from "@/components/tag-badge";
 import { FileTagsDialog } from "@/components/file-tags-dialog";
-import { TagFilterBar } from "@/components/file-explorer/tag-filter-bar";
+import {
+  DataFilter,
+  type FilterColumnDef,
+} from "@/components/file-explorer/data-filter";
 import { toast } from "sonner";
 
 const ROW_GRID =
@@ -85,6 +89,10 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     "tags",
     parseAsArrayOf(parseAsString).withDefault([]),
   );
+  const [selectedFileTypes, setSelectedFileTypes] = useQueryState(
+    "type",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
 
   const utils = trpc.useUtils();
   const { handleDrop } = useFileDrop();
@@ -107,6 +115,17 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     field: "name",
     direction: "asc",
     tagSlugs: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+    fileTypes:
+      selectedFileTypes.length > 0
+        ? (selectedFileTypes as (
+            | "image"
+            | "document"
+            | "video"
+            | "audio"
+            | "archive"
+            | "other"
+          )[])
+        : undefined,
   });
 
   const isLoading = foldersLoading || filesLoading;
@@ -207,6 +226,37 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     [handleDrop],
   );
 
+  const filterColumns = useMemo<FilterColumnDef[]>(() => {
+    const cols: FilterColumnDef[] = [
+      {
+        id: "type",
+        label: "File Type",
+        icon: FileLucide,
+        options: [
+          { label: "Images", value: "image" },
+          { label: "Documents", value: "document" },
+          { label: "Videos", value: "video" },
+          { label: "Audio", value: "audio" },
+          { label: "Archives", value: "archive" },
+          { label: "Other", value: "other" },
+        ],
+      },
+    ];
+    if (allTags.length > 0) {
+      cols.push({
+        id: "tags",
+        label: "Tags",
+        icon: Tag,
+        options: allTags.map((t) => ({
+          label: t.name,
+          value: t.slug,
+          color: t.color,
+        })),
+      });
+    }
+    return cols;
+  }, [allTags]);
+
   const folders = folderList ?? [];
   const files = fileList?.items ?? [];
   const isEmpty = folders.length === 0 && files.length === 0;
@@ -257,26 +307,32 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
         </div>
       </header>
 
-      {/* Tag filter bar */}
-      {allTags.length > 0 && (
+      {/* Filter bar */}
+      {filterColumns.length > 0 && (
         <div className="px-6 pt-4">
-          <TagFilterBar
-            tags={allTags}
-            selectedSlugs={selectedTagIds}
-            onToggle={(slug) =>
-              setSelectedTagIds((prev) =>
-                prev.includes(slug)
-                  ? prev.filter((s) => s !== slug)
-                  : [...prev, slug],
-              )
-            }
-            onClear={() => setSelectedTagIds(null)}
+          <DataFilter
+            columns={filterColumns}
+            activeFilters={{
+              tags: selectedTagIds,
+              type: selectedFileTypes,
+            }}
+            onFilterChange={(columnId, values) => {
+              if (columnId === "tags") {
+                setSelectedTagIds(values.length > 0 ? values : null);
+              } else if (columnId === "type") {
+                setSelectedFileTypes(values.length > 0 ? values : null);
+              }
+            }}
+            onClearAll={() => {
+              setSelectedTagIds(null);
+              setSelectedFileTypes(null);
+            }}
           />
         </div>
       )}
 
       {/* Content */}
-      <div className={allTags.length > 0 ? "px-6 pb-6 pt-4" : "p-6"}>
+      <div className={filterColumns.length > 0 ? "px-6 pb-6 pt-4" : "p-6"}>
         {/* File List */}
         {isLoading ? (
           <div className="rounded-lg border bg-card overflow-hidden">

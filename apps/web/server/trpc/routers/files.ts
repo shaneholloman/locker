@@ -8,6 +8,7 @@ import {
   sql,
   ilike,
   inArray,
+  not,
   or,
 } from "drizzle-orm";
 import { createRouter, workspaceProcedure } from "../init";
@@ -18,6 +19,11 @@ import {
   moveItemSchema,
   paginationSchema,
   sortSchema,
+  IMAGE_MIME_TYPES,
+  DOCUMENT_MIME_TYPES,
+  VIDEO_MIME_TYPES,
+  AUDIO_MIME_TYPES,
+  ARCHIVE_MIME_TYPES,
 } from "@locker/common";
 import { enhanceSearchResultsWithPlugins } from "../../plugins/search";
 import { qmdClient } from "../../plugins/handlers/qmd-client";
@@ -32,14 +38,34 @@ export const filesRouter = createRouter({
         folderId: z.string().uuid().nullable().default(null),
         search: z.string().optional(),
         tagSlugs: z.array(z.string()).optional(),
+        fileTypes: z
+          .array(
+            z.enum([
+              "image",
+              "document",
+              "video",
+              "audio",
+              "archive",
+              "other",
+            ]),
+          )
+          .optional(),
         ...paginationSchema.shape,
         ...sortSchema.shape,
       }),
     )
     .query(async ({ ctx, input }) => {
       const { db } = ctx;
-      const { folderId, search, tagSlugs, page, pageSize, field, direction } =
-        input;
+      const {
+        folderId,
+        search,
+        tagSlugs,
+        fileTypes,
+        page,
+        pageSize,
+        field,
+        direction,
+      } = input;
 
       const conditions = [eq(files.workspaceId, ctx.workspaceId)];
 
@@ -130,6 +156,49 @@ export const filesRouter = createRouter({
               ),
           ),
         );
+      }
+
+      // File type filtering (OR semantics: file matches ANY selected type)
+      if (fileTypes && fileTypes.length > 0) {
+        const categoryMap: Record<string, readonly string[]> = {
+          image: IMAGE_MIME_TYPES,
+          document: DOCUMENT_MIME_TYPES,
+          video: VIDEO_MIME_TYPES,
+          audio: AUDIO_MIME_TYPES,
+          archive: ARCHIVE_MIME_TYPES,
+        };
+
+        const mimeTypes: string[] = [];
+        let includeOther = false;
+
+        for (const type of fileTypes) {
+          if (type === "other") {
+            includeOther = true;
+          } else if (categoryMap[type]) {
+            mimeTypes.push(...categoryMap[type]);
+          }
+        }
+
+        const allKnownMimeTypes: string[] = [
+          ...IMAGE_MIME_TYPES,
+          ...DOCUMENT_MIME_TYPES,
+          ...VIDEO_MIME_TYPES,
+          ...AUDIO_MIME_TYPES,
+          ...ARCHIVE_MIME_TYPES,
+        ];
+
+        if (mimeTypes.length > 0 && includeOther) {
+          conditions.push(
+            or(
+              inArray(files.mimeType, mimeTypes),
+              not(inArray(files.mimeType, allKnownMimeTypes)),
+            )!,
+          );
+        } else if (mimeTypes.length > 0) {
+          conditions.push(inArray(files.mimeType, mimeTypes));
+        } else if (includeOther) {
+          conditions.push(not(inArray(files.mimeType, allKnownMimeTypes)));
+        }
       }
 
       const orderBy =
