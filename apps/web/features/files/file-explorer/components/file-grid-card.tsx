@@ -25,6 +25,7 @@ import {
 import { isTextIndexable } from "@locker/common";
 import { getFileCategory } from "@locker/common";
 import { GridCardPreview } from "./grid-card-preview";
+import { Avatar } from "@/components/avatar";
 
 type PluginAction = {
   workspacePluginId: string;
@@ -213,7 +214,8 @@ export function FileGridCard({
       </div>
 
       {/* Footer */}
-      <div className="px-2.5 py-2 mt-auto">
+      <div className="px-2.5 py-2 mt-auto flex items-center gap-1.5">
+        <Avatar className="size-4 rounded-full" />
         <span className="text-xs text-muted-foreground truncate">
           Modified {formatDate(file.updatedAt)}
         </span>

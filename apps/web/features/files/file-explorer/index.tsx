@@ -404,6 +404,7 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                 }
               />
             ))}
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border bg-card overflow-hidden">
