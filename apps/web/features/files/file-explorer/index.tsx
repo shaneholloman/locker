@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { File as FileLucide, CalendarDays, Tag } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
@@ -23,10 +23,12 @@ import { ExplorerSkeleton } from "./components/explorer-skeleton";
 import { EmptyState } from "./components/empty-state";
 import { FolderRowContent } from "./components/folder-row-content";
 import { FileRowContent } from "./components/file-row-content";
-import {
-  DataFilter,
-  type FilterColumnDef,
-} from "./components/data-filter";
+import { DataFilter, type FilterColumnDef } from "./components/data-filter";
+import { FileViewToggle } from "./components/file-view-toggle";
+import { FileGridCard } from "./components/file-grid-card";
+import { FolderGridCard } from "./components/folder-grid-card";
+
+const STORAGE_KEY = "openstore:file-view-preference";
 
 export function FileExplorer({ folderId }: { folderId: string | null }) {
   const router = useRouter();
@@ -36,6 +38,16 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
   const [droppedFiles, setDroppedFiles] = useState<File[] | undefined>(
     undefined,
   );
+  const [fileView, setFileView] = useState<"row" | "grid">(() => {
+    if (typeof window === "undefined") return "row";
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored === "grid" ? "grid" : "row";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, fileView);
+  }, [fileView]);
+
   const [renameTarget, setRenameTarget] = useState<{
     id: string;
     name: string;
@@ -265,8 +277,8 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
       />
 
       {/* Filter bar */}
-      {filterColumns.length > 0 && (
-        <div className="px-6 pt-4">
+      <div className="px-6 pt-4 flex items-center">
+        {filterColumns.length > 0 && (
           <DataFilter
             columns={filterColumns}
             activeFilters={{
@@ -289,15 +301,110 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
               setSelectedDates(null);
             }}
           />
-        </div>
-      )}
+        )}
+        <FileViewToggle
+          fileView={fileView}
+          onChange={(v) => setFileView(v)}
+          className="ml-auto"
+        />
+      </div>
 
       {/* Content */}
-      <div className={filterColumns.length > 0 ? "px-6 pb-6 pt-4" : "p-6"}>
+      <div className="px-6 pb-6 pt-4">
         {isLoading ? (
-          <ExplorerSkeleton />
+          <ExplorerSkeleton view={fileView} />
         ) : isEmpty ? (
           <EmptyState onUpload={() => setShowUpload(true)} />
+        ) : fileView === "grid" ? (
+          <div className="space-y-4">
+            {folders.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
+                {folders.map((folder) => (
+                  <FolderGridCard
+                    key={folder.id}
+                    folder={folder}
+                    pluginActions={folderPluginActions}
+                    onClick={() =>
+                      router.push(`/w/${workspace.slug}/folder/${folder.id}`)
+                    }
+                    onRename={() =>
+                      setRenameTarget({
+                        id: folder.id,
+                        name: folder.name,
+                        type: "folder",
+                      })
+                    }
+                    onShare={() =>
+                      setShareTarget({
+                        id: folder.id,
+                        name: folder.name,
+                        type: "folder",
+                      })
+                    }
+                    onTrack={() =>
+                      setTrackTarget({
+                        id: folder.id,
+                        name: folder.name,
+                        type: "folder",
+                      })
+                    }
+                    onDelete={() => deleteFolder.mutate({ id: folder.id })}
+                    onPluginAction={(action) =>
+                      handlePluginAction(action, "folder", folder.id)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {files.map((file) => (
+              <FileGridCard
+                key={file.id}
+                file={file}
+                transcriptionStatus={transcriptionStatuses[file.id]}
+                pluginActions={filePluginActions}
+                onClick={() =>
+                  router.push(`/w/${workspace.slug}/file/${file.id}`)
+                }
+                onDownload={() => handleDownload(file.id)}
+                onRename={() =>
+                  setRenameTarget({
+                    id: file.id,
+                    name: file.name,
+                    type: "file",
+                  })
+                }
+                onShare={() =>
+                  setShareTarget({
+                    id: file.id,
+                    name: file.name,
+                    type: "file",
+                  })
+                }
+                onTrack={() =>
+                  setTrackTarget({
+                    id: file.id,
+                    name: file.name,
+                    type: "file",
+                  })
+                }
+                onEditTags={() => setTagTarget(file.id)}
+                onDelete={() => deleteFile.mutate({ id: file.id })}
+                onPluginAction={(action) =>
+                  handlePluginAction(action, "file", file.id)
+                }
+                onViewTranscription={() =>
+                  setTranscriptionTarget({
+                    id: file.id,
+                    name: file.name,
+                  })
+                }
+                onGenerateTranscription={() =>
+                  generateTranscription.mutate({ fileId: file.id })
+                }
+              />
+            ))}
+          </div>
         ) : (
           <div className="rounded-lg border bg-card overflow-hidden">
             {/* Table header */}

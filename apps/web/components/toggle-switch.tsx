@@ -12,12 +12,14 @@ type ToggleSwitchProps<T extends string> = {
   }[];
   value: T;
   onChange: (selectedValue: T) => void;
+  className?: string;
 };
 
 export function ToggleSwitch<T extends string>({
   options,
   onChange,
   value,
+  className,
 }: ToggleSwitchProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [highlight, setHighlight] = useState({ left: 0, width: 0 });
@@ -49,7 +51,10 @@ export function ToggleSwitch<T extends string>({
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center rounded-full border bg-muted/50 p-0.5"
+      className={cn(
+        "relative flex items-center rounded-full border bg-muted/50 p-0.5",
+        className,
+      )}
     >
       {ready && activeIndex !== -1 && highlight.width > 0 && (
         <motion.div
