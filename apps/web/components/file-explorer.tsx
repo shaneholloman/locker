@@ -17,6 +17,7 @@ import {
   Sparkles,
   FileText,
   Loader2,
+  Tag,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { formatBytes, formatDate } from "@/lib/utils";
@@ -43,6 +44,9 @@ import { useFileDrop } from "@/hooks/use-file-drop";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useWorkspace } from "@/lib/workspace-context";
 import { isTextIndexable } from "@locker/common";
+import { TagBadge } from "@/components/tag-badge";
+import { FileTagsDialog } from "@/components/file-tags-dialog";
+import { TagFilterBar } from "@/components/file-explorer/tag-filter-bar";
 import { toast } from "sonner";
 
 const ROW_GRID =
@@ -75,6 +79,8 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
     id: string;
     name: string;
   } | null>(null);
+  const [tagTarget, setTagTarget] = useState<string | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const utils = trpc.useUtils();
   const { handleDrop } = useFileDrop();
@@ -88,12 +94,15 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
       parentId: folderId,
     });
 
+  const { data: allTags = [] } = trpc.tags.list.useQuery();
+
   const { data: fileList, isLoading: filesLoading } = trpc.files.list.useQuery({
     folderId,
     page: 1,
     pageSize: 100,
     field: "name",
     direction: "asc",
+    tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
   });
 
   const isLoading = foldersLoading || filesLoading;
@@ -132,6 +141,10 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
       { fileIds },
       { enabled: fileIds.length > 0, retry: false },
     );
+  const { data: fileTagsMap = {} } = trpc.tags.getFileTagsBatch.useQuery(
+    { fileIds },
+    { enabled: fileIds.length > 0 },
+  );
   const generateTranscription = trpc.transcriptions.generate.useMutation({
     onSuccess: (result) => {
       if (result.status === "queued") {
@@ -240,8 +253,26 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
         </div>
       </header>
 
+      {/* Tag filter bar */}
+      {allTags.length > 0 && (
+        <div className="px-6 pt-4">
+          <TagFilterBar
+            tags={allTags}
+            selectedTagIds={selectedTagIds}
+            onToggle={(tagId) =>
+              setSelectedTagIds((prev) =>
+                prev.includes(tagId)
+                  ? prev.filter((id) => id !== tagId)
+                  : [...prev, tagId],
+              )
+            }
+            onClear={() => setSelectedTagIds([])}
+          />
+        </div>
+      )}
+
       {/* Content */}
-      <div className="p-6">
+      <div className={allTags.length > 0 ? "px-6 pb-6 pt-4" : "p-6"}>
         {/* File List */}
         {isLoading ? (
           <div className="rounded-lg border bg-card overflow-hidden">
@@ -433,6 +464,22 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                     className="size-4 shrink-0"
                   />
                   <span className="text-sm truncate">{file.name}</span>
+                  {fileTagsMap[file.id]?.length > 0 && (
+                    <div className="hidden sm:flex items-center gap-1 shrink-0">
+                      {fileTagsMap[file.id].slice(0, 3).map((tag) => (
+                        <TagBadge
+                          key={tag.id}
+                          name={tag.name}
+                          color={tag.color}
+                        />
+                      ))}
+                      {fileTagsMap[file.id].length > 3 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{fileTagsMap[file.id].length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="hidden sm:block">
                   <span className="text-xs font-mono text-muted-foreground tabular-nums">
@@ -497,6 +544,10 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
                       >
                         <BarChart3 />
                         Track
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setTagTarget(file.id)}>
+                        <Tag />
+                        Edit Tags
                       </DropdownMenuItem>
                       {filePluginActions.length > 0 && (
                         <>
@@ -642,6 +693,13 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
           open={!!transcriptionTarget}
           onOpenChange={(open) => !open && setTranscriptionTarget(null)}
           file={transcriptionTarget}
+        />
+      )}
+      {tagTarget && (
+        <FileTagsDialog
+          open={!!tagTarget}
+          onOpenChange={(open) => !open && setTagTarget(null)}
+          fileId={tagTarget}
         />
       )}
     </div>

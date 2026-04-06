@@ -12,6 +12,7 @@ import { users } from "./users";
 import { folders } from "./folders";
 import { workspaces } from "./workspaces";
 import { workspaceStorageConfigs } from "./workspace-storage-configs";
+import { fileTags } from "./tags";
 
 export const files = pgTable(
   "files",
@@ -51,7 +52,7 @@ export const files = pgTable(
   ],
 );
 
-export const filesRelations = relations(files, ({ one }) => ({
+export const filesRelations = relations(files, ({ one, many }) => ({
   workspace: one(workspaces, {
     fields: [files.workspaceId],
     references: [workspaces.id],
@@ -68,4 +69,5 @@ export const filesRelations = relations(files, ({ one }) => ({
     fields: [files.storageConfigId],
     references: [workspaceStorageConfigs.id],
   }),
+  fileTags: many(fileTags),
 }));

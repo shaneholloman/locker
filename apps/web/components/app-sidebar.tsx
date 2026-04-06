@@ -18,11 +18,13 @@ import {
   PanelLeftOpen,
   Plus,
   ChevronsUpDown,
+  Tag,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
 import { signOut } from "@/lib/auth/client";
 import { trpc } from "@/lib/trpc/client";
 import { StorageUsage } from "./storage-usage";
+import { ManageTagsDialog } from "./manage-tags-dialog";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -39,28 +41,34 @@ import {
 
 function NavItem({
   href,
+  onClick,
   icon: Icon,
   label,
   isActive,
   collapsed,
 }: {
-  href: string;
+  href?: string;
+  onClick?: () => void;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   isActive: boolean;
   collapsed: boolean;
 }) {
-  const link = (
-    <Link
-      href={href}
-      className={cn(
-        "group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        collapsed ? "w-8 justify-center" : "w-full",
-      )}
-    >
+  const classes = cn(
+    "group/nav relative flex h-8 items-center gap-2 rounded-lg p-2 text-sm transition-colors",
+    isActive
+      ? "bg-accent text-foreground"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+    collapsed ? "w-8 justify-center" : "w-full",
+  );
+
+  const content = onClick ? (
+    <button onClick={onClick} className={classes}>
+      <Icon className="size-4 shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+    </button>
+  ) : (
+    <Link href={href!} className={classes}>
       <Icon className="size-4 shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
@@ -69,7 +77,7 @@ function NavItem({
   if (collapsed) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
         <TooltipContent side="right" sideOffset={8}>
           {label}
         </TooltipContent>
@@ -77,7 +85,7 @@ function NavItem({
     );
   }
 
-  return link;
+  return content;
 }
 
 function NavSection({
@@ -114,6 +122,7 @@ export function AppSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [showManageTags, setShowManageTags] = useState(false);
 
   const slugMatch = pathname.match(/\/w\/([^/]+)/);
   const slug = slugMatch?.[1] ?? "";
@@ -124,6 +133,12 @@ export function AppSidebar({
 
   const navItems = [
     { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
+    {
+      key: "tags",
+      label: "Tags",
+      icon: Tag,
+      onClick: () => setShowManageTags(true),
+    },
     {
       href: `${prefix}/shared-links`,
       label: "Share Links",
@@ -272,14 +287,17 @@ export function AppSidebar({
           <NavSection label="Files" collapsed={collapsed}>
             {navItems.map((item) => {
               const isActive =
-                item.key === "files"
-                  ? pathname === prefix ||
-                    pathname.startsWith(`${prefix}/folder`)
-                  : pathname.startsWith(item.href);
+                "onClick" in item
+                  ? false
+                  : item.key === "files"
+                    ? pathname === prefix ||
+                      pathname.startsWith(`${prefix}/folder`)
+                    : pathname.startsWith(item.href!);
               return (
                 <NavItem
                   key={item.key}
-                  href={item.href}
+                  href={"href" in item ? item.href : undefined}
+                  onClick={"onClick" in item ? item.onClick : undefined}
                   icon={item.icon}
                   label={item.label}
                   isActive={isActive}
@@ -347,6 +365,11 @@ export function AppSidebar({
           </button>
         )}
       </div>
+
+      <ManageTagsDialog
+        open={showManageTags}
+        onOpenChange={setShowManageTags}
+      />
     </div>
   );
 }

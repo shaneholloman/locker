@@ -11,7 +11,7 @@ import {
   or,
 } from "drizzle-orm";
 import { createRouter, workspaceProcedure } from "../init";
-import { files, workspaces, folders } from "@locker/database";
+import { files, workspaces, folders, fileTags } from "@locker/database";
 import { createStorageForFile } from "../../../server/storage";
 import {
   renameFileSchema,
@@ -31,13 +31,15 @@ export const filesRouter = createRouter({
       z.object({
         folderId: z.string().uuid().nullable().default(null),
         search: z.string().optional(),
+        tagIds: z.array(z.string().uuid()).optional(),
         ...paginationSchema.shape,
         ...sortSchema.shape,
       }),
     )
     .query(async ({ ctx, input }) => {
       const { db } = ctx;
-      const { folderId, search, page, pageSize, field, direction } = input;
+      const { folderId, search, tagIds, page, pageSize, field, direction } =
+        input;
 
       const conditions = [eq(files.workspaceId, ctx.workspaceId)];
 
@@ -104,6 +106,23 @@ export const filesRouter = createRouter({
       } else {
         conditions.push(
           folderId ? eq(files.folderId, folderId) : isNull(files.folderId),
+        );
+      }
+
+      // Tag filtering (AND semantics: file must have ALL selected tags)
+      if (tagIds && tagIds.length > 0) {
+        conditions.push(
+          inArray(
+            files.id,
+            db
+              .select({ fileId: fileTags.fileId })
+              .from(fileTags)
+              .where(inArray(fileTags.tagId, tagIds))
+              .groupBy(fileTags.fileId)
+              .having(
+                sql`count(distinct ${fileTags.tagId}) = ${tagIds.length}`,
+              ),
+          ),
         );
       }
 

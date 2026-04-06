@@ -13,6 +13,7 @@ import { pluginsRouter } from "./routers/plugins";
 import { transcriptionsRouter } from "./routers/transcriptions";
 import { vfsShellRouter } from "./routers/vfs-shell";
 import { storageConfigRouter } from "./routers/storage-config";
+import { tagsRouter } from "./routers/tags";
 
 export const appRouter = createRouter({
   files: filesRouter,
@@ -29,6 +30,7 @@ export const appRouter = createRouter({
   plugins: pluginsRouter,
   transcriptions: transcriptionsRouter,
   vfsShell: vfsShellRouter,
+  tags: tagsRouter,
 });
 
 export type AppRouter = typeof appRouter;

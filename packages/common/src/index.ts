@@ -96,5 +96,9 @@ export {
   initiateUploadSchema,
   completeUploadSchema,
   abortUploadSchema,
+  createTagSchema,
+  updateTagSchema,
+  deleteTagSchema,
+  setFileTagsSchema,
   generateSlug,
 } from "./validation";
