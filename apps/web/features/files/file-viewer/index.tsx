@@ -352,7 +352,6 @@ export function FileViewer({ fileId }: { fileId: string }) {
                   <dd className="flex items-center gap-1.5 flex-wrap justify-end min-w-0 overflow-hidden">
                     {fileTags.map((tag) => (
                       <TagBadge
-                        className="max-w-30"
                         key={tag.id}
                         name={tag.name}
                         color={tag.color}
