@@ -189,6 +189,21 @@ export const setFileTagsSchema = z.object({
   tagIds: z.array(z.string().uuid()),
 });
 
+export const createKnowledgeBaseSchema = z.object({
+  tagId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  schemaPrompt: z.string().max(10000).optional(),
+});
+
+export const updateKnowledgeBaseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  schemaPrompt: z.string().max(10000).optional(),
+  model: z.string().max(80).optional(),
+});
+
 export function generateSlug(name: string): string {
   const slug = name
     .toLowerCase()

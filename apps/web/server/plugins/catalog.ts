@@ -203,6 +203,37 @@ const builtinPluginManifestsRaw: PluginManifest[] = [
       priority: 50,
     },
   },
+  {
+    slug: "knowledge-base",
+    name: "Knowledge Base",
+    description:
+      "Build a persistent, interlinked wiki of knowledge from your tagged documents using AI. Chat with your knowledge base, ingest new sources, and lint for quality issues.",
+    version: "0.1.0",
+    developer: "Locker",
+    source: "official",
+    permissions: ["files.read", "files.write", "external.network"],
+    capabilities: ["conversational_panel", "file_actions"],
+    actions: [
+      {
+        id: "kb.ingest-file",
+        label: "Ingest into Knowledge Base",
+        description:
+          "Extract knowledge from this file and integrate it into the linked wiki.",
+        target: "file",
+        requiresPermissions: ["files.read", "files.write"],
+      },
+    ],
+    configFields: [
+      {
+        key: "model",
+        label: "Model",
+        description:
+          'AI model to use for ingestion and chat (e.g., "openai/gpt-4o"). Leave empty for the default.',
+        type: "text",
+        required: false,
+      },
+    ],
+  },
 ];
 
 const builtinPluginManifests = builtinPluginManifestsRaw.map((manifest) =>

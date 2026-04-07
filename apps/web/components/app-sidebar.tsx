@@ -13,6 +13,7 @@ import {
   Key,
   BarChart3,
   Puzzle,
+  BookOpen,
   TerminalSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -152,6 +153,12 @@ export function AppSidebar({
       label: "Plugins",
       icon: Puzzle,
       key: "plugins",
+    },
+    {
+      href: `${prefix}/knowledge-bases`,
+      label: "Knowledge Base",
+      icon: BookOpen,
+      key: "knowledge-bases",
     },
     {
       href: `${prefix}/terminal`,

@@ -85,6 +85,13 @@
       "when": 1775474829554,
       "tag": "0011_legal_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1775592066954,
+      "tag": "0012_wonderful_revanche",
+      "breakpoints": true
     }
   ]
 }

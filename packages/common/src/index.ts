@@ -102,4 +102,6 @@ export {
   setFileTagsSchema,
   generateSlug,
   generateTagSlug,
+  createKnowledgeBaseSchema,
+  updateKnowledgeBaseSchema,
 } from "./validation";

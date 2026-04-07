@@ -1,10 +1,5 @@
-import { generateText, createGateway } from "ai";
-
-const DEFAULT_MODEL = "openai/gpt-4o";
-
-const gateway = createGateway({
-  apiKey: process.env.AI_GATEWAY_API_KEY,
-});
+import { generateText } from "ai";
+import { gateway, DEFAULT_MODEL } from "./gateway";
 
 /**
  * Transcribe a file (image or PDF) into markdown using the Vercel AI Gateway.

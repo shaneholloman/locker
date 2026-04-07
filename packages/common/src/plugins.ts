@@ -89,6 +89,7 @@ export const PLUGIN_CAPABILITIES = [
   "folder_actions",
   "import_export",
   "document_transcription",
+  "conversational_panel",
 ] as const;
 export type PluginCapability = (typeof PLUGIN_CAPABILITIES)[number];
 

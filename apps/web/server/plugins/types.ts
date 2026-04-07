@@ -1,6 +1,7 @@
 import type { Database } from "@locker/database";
 import type { StorageProvider } from "@locker/storage";
 import type { PluginManifest } from "@locker/common";
+import type { ModelMessage } from "ai";
 
 /** Scoped context passed to every plugin handler invocation. */
 export interface PluginContext {
@@ -35,6 +36,25 @@ export interface SearchResult {
 
 export interface TranscriptionResult {
   content: string;
+}
+
+export interface IngestResult {
+  status: "success" | "partial" | "error";
+  pagesCreated: string[];
+  pagesUpdated: string[];
+  message: string;
+}
+
+export interface LintIssue {
+  type: "contradiction" | "orphan" | "stale" | "missing_link";
+  page: string;
+  description: string;
+  severity: "info" | "warning" | "error";
+}
+
+export interface LintResult {
+  issues: LintIssue[];
+  summary: string;
 }
 
 /**
@@ -76,4 +96,48 @@ export interface PluginHandler {
       storageConfigId: string | null;
     },
   ): Promise<TranscriptionResult>;
+
+  /**
+   * Stream a chat response using the knowledge base wiki as context.
+   * Called when the plugin has the `conversational_panel` capability.
+   * Returns a streamText result — caller uses toUIMessageStreamResponse().
+   */
+  chat?(
+    ctx: PluginContext,
+    params: {
+      knowledgeBaseId: string;
+      messages: ModelMessage[];
+      wikiStoragePath: string;
+      schemaPrompt: string;
+    },
+  ): Promise<unknown>;
+
+  /**
+   * Ingest a source file into the knowledge base wiki.
+   * Reads the file content, calls the LLM to extract knowledge,
+   * and creates/updates wiki pages in storage.
+   */
+  ingest?(
+    ctx: PluginContext,
+    params: {
+      knowledgeBaseId: string;
+      fileId: string;
+      fileName: string;
+      fileContent: string;
+      wikiStoragePath: string;
+      schemaPrompt: string;
+    },
+  ): Promise<IngestResult>;
+
+  /**
+   * Lint the wiki for contradictions, orphans, stale claims, and missing links.
+   */
+  lint?(
+    ctx: PluginContext,
+    params: {
+      knowledgeBaseId: string;
+      wikiStoragePath: string;
+      schemaPrompt: string;
+    },
+  ): Promise<LintResult>;
 }
