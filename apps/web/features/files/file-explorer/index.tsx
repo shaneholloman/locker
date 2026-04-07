@@ -477,6 +477,7 @@ export function FileExplorer({ folderId }: { folderId: string | null }) {
               <FileRowContent
                 key={file.id}
                 file={file}
+                uploader={userMap[file.userId]}
                 tags={fileTagsMap[file.id] ?? []}
                 transcriptionStatus={transcriptionStatuses[file.id]}
                 pluginActions={filePluginActions}

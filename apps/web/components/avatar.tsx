@@ -55,7 +55,12 @@ function PureAvatar({
           />
         )}
 
-        <AvatarFallback className="absolute inset-0 z-0 h-full w-full text-xs font-medium">
+        <AvatarFallback
+          className="absolute inset-0 z-0 h-full w-full text-xs font-medium"
+          style={{
+            fontSize: width * 0.5,
+          }}
+        >
           {getInitials(alt)}
         </AvatarFallback>
         <div className="pointer-events-none absolute inset-0 ring-1 ring-black/10 ring-inset" />

@@ -68,12 +68,14 @@ export function FolderRowContent({
         <FileIcon name={folder.name} isFolder className="size-4 shrink-0" />
         <span className="text-sm font-medium truncate">{folder.name}</span>
       </div>
-      <span className="hidden sm:block text-xs font-mono text-muted-foreground">
-        &mdash;
-      </span>
-      <span className="hidden sm:block text-xs font-mono text-muted-foreground">
-        {formatDate(folder.updatedAt)}
-      </span>
+      <div className="hidden sm:flex items-center gap-1.5">
+        <span className="text-xs font-mono text-muted-foreground">&mdash;</span>
+      </div>
+      <div className="hidden sm:flex items-center gap-1.5">
+        <span className="text-xs font-mono text-muted-foreground">
+          {formatDate(folder.updatedAt)}
+        </span>
+      </div>
       <div onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

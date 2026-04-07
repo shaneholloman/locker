@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TagBadge } from "@/components/tag-badge";
+import { Avatar } from "@/components/avatar";
 import { isTextIndexable } from "@locker/common";
 import { DraggableFileRow } from "./draggable-file-row";
 
@@ -39,6 +40,7 @@ type FileTag = { id: string; name: string; color: string | null };
 
 export function FileRowContent({
   file,
+  uploader,
   tags,
   transcriptionStatus,
   pluginActions,
@@ -60,6 +62,7 @@ export function FileRowContent({
     size: number;
     updatedAt: Date;
   };
+  uploader?: { name: string | null; image: string | null };
   tags: FileTag[];
   transcriptionStatus: string | undefined;
   pluginActions: PluginAction[];
@@ -109,7 +112,15 @@ export function FileRowContent({
           {formatBytes(file.size)}
         </span>
       </div>
-      <div className="hidden sm:block">
+      <div className="hidden sm:flex items-center gap-1.5">
+        {uploader && (
+          <Avatar
+            name={uploader.name}
+            src={uploader.image}
+            className="size-4 rounded-full shrink-0"
+            width={16}
+          />
+        )}
         <span className="text-xs font-mono text-muted-foreground">
           {formatDate(file.updatedAt)}
         </span>
