@@ -128,6 +128,16 @@ export const pluginConfigFieldSchema = z.object({
   placeholder: z.string().max(200).optional(),
 });
 
+export const pluginSidebarItemSchema = z.object({
+  label: z.string().min(1).max(80),
+  icon: z.string().min(1).max(60),
+  path: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^\//, "Sidebar item path must start with /"),
+});
+
 export const pluginTranscriptionSchema = z.object({
   supportedMimeTypes: z.array(z.string()).min(1),
   priority: z.number().int().min(0).max(100).default(50),
@@ -169,6 +179,7 @@ export const pluginManifestSchema = z
     actions: z.array(pluginActionSchema).default([]),
     configFields: z.array(pluginConfigFieldSchema).default([]),
     transcription: pluginTranscriptionSchema.optional(),
+    sidebarItem: pluginSidebarItemSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const permissionSet = new Set(value.permissions);

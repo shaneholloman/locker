@@ -58,7 +58,8 @@ export function KBSettings({
   });
 
   const deleteMutation = trpc.knowledgeBases.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      await utils.knowledgeBases.list.invalidate();
       router.push(`/w/${workspace.slug}/knowledge-bases`);
       toast.success("Knowledge base deleted");
     },

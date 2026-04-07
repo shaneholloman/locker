@@ -7,6 +7,7 @@ import { Send, Plus, Loader2, MessageSquare, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { trpc } from "@/lib/trpc/client";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -204,7 +205,12 @@ export function ChatPanel({
                         return (
                           <div
                             key={partIdx}
-                            className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-code:text-[0.85em]"
+                            className={cn(
+                              "prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-code:text-[0.85em]",
+                              message.role === "user"
+                                ? "prose-invert"
+                                : "dark:prose-invert",
+                            )}
                           >
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {part.text}

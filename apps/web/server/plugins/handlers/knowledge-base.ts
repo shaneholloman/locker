@@ -86,6 +86,13 @@ function getModel(ctx: PluginContext): string {
   return (ctx.config.model as string) || process.env.AI_GATEWAY_MODEL || DEFAULT_MODEL;
 }
 
+/** Strip markdown code fences (```json ... ```) from LLM output. */
+function extractJson(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  return raw.trim();
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -137,7 +144,7 @@ export const knowledgeBaseHandler: PluginHandler = {
     }>;
 
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(extractJson(text));
       actions = parsed.actions ?? [];
     } catch {
       return {
@@ -227,7 +234,7 @@ export const knowledgeBaseHandler: PluginHandler = {
       });
 
       try {
-        const parsed = JSON.parse(selectionJson);
+        const parsed = JSON.parse(extractJson(selectionJson));
         if (Array.isArray(parsed)) {
           selectedPaths = parsed.filter((p): p is string => typeof p === "string");
         }
@@ -306,7 +313,7 @@ export const knowledgeBaseHandler: PluginHandler = {
     });
 
     try {
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(extractJson(text));
       return {
         issues: parsed.issues ?? [],
         summary: parsed.summary ?? "Lint complete.",

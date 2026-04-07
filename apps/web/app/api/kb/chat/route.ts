@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { eq, and, asc } from "drizzle-orm";
-import { convertToModelMessages } from "ai";
+import { eq, and } from "drizzle-orm";
+import { convertToModelMessages, type UIMessage } from "ai";
 import { auth } from "../../../../server/auth";
 import { getDb } from "@locker/database/client";
 import {
@@ -19,21 +19,16 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    messages: uiMessages,
+    messages,
     knowledgeBaseId,
     conversationId,
   } = body as {
-    messages: Array<{
-      id: string;
-      role: string;
-      parts: unknown[];
-      metadata?: unknown;
-    }>;
+    messages: UIMessage[];
     knowledgeBaseId: string;
     conversationId: string;
   };
 
-  if (!knowledgeBaseId || !conversationId || !uiMessages?.length) {
+  if (!knowledgeBaseId || !conversationId || !messages?.length) {
     return NextResponse.json(
       { error: "Missing knowledgeBaseId, conversationId, or messages" },
       { status: 400 },
@@ -77,18 +72,21 @@ export async function POST(req: NextRequest) {
   }
 
   // Save the latest user message
-  const lastUserMessage = [...uiMessages]
+  const lastUserMessage = [...messages]
     .reverse()
     .find((m) => m.role === "user");
 
   if (lastUserMessage) {
-    await db.insert(kbMessages).values({
-      id: lastUserMessage.id,
-      conversationId,
-      role: "user",
-      parts: lastUserMessage.parts as any,
-      metadata: (lastUserMessage.metadata as any) ?? null,
-    });
+    await db
+      .insert(kbMessages)
+      .values({
+        id: lastUserMessage.id,
+        conversationId,
+        role: "user",
+        parts: lastUserMessage.parts as any,
+        metadata: (lastUserMessage.metadata as any) ?? null,
+      })
+      .onConflictDoNothing();
 
     // Auto-title: if conversation has no title, set from first user message
     if (!conversation.title) {
@@ -124,7 +122,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Convert UIMessages to ModelMessages for the LLM
-  const modelMessages = await convertToModelMessages(uiMessages as any);
+  const modelMessages = await convertToModelMessages(messages);
 
   try {
     const result = await handler.chat(pluginCtx, {
@@ -134,40 +132,39 @@ export async function POST(req: NextRequest) {
       schemaPrompt: kb.schemaPrompt,
     });
 
-    // The handler returns a streamText() result
-    const streamResult = result as {
-      toUIMessageStreamResponse: (opts?: {
-        onFinish?: (event: { messages?: Array<{ id: string; role: string; parts: unknown[]; metadata?: unknown }> }) => Promise<void>;
-      }) => Response;
-    };
+    // The handler returns a streamText() result.
+    // Use consumeStream to ensure the stream is fully read (enabling
+    // the .text promise to resolve even if the client disconnects).
+    const streamResult = result as Awaited<ReturnType<typeof import("ai").streamText>>;
+    streamResult.consumeStream();
 
-    // Return streaming response compatible with useChat()
-    const response = streamResult.toUIMessageStreamResponse({
-      onFinish: async ({ messages: finishedMessages }: { messages?: Array<{ id: string; role: string; parts: unknown[]; metadata?: unknown }> }) => {
-        // Save the assistant message(s)
-        if (finishedMessages) {
-          for (const msg of finishedMessages) {
-            if (msg.role === "assistant") {
-              await db.insert(kbMessages).values({
-                id: msg.id,
-                conversationId,
-                role: "assistant",
-                parts: msg.parts as any,
-                metadata: (msg.metadata as any) ?? null,
-              });
-            }
-          }
-        }
+    // Save assistant message once streaming completes.
+    // The .text promise resolves with the full generated text after
+    // the stream finishes. We fire-and-forget but the Next.js runtime
+    // keeps the function alive because the response stream is still open.
+    streamResult.text
+      .then(async (fullText) => {
+        await db
+          .insert(kbMessages)
+          .values({
+            conversationId,
+            role: "assistant",
+            parts: [{ type: "text", text: fullText }],
+            metadata: null,
+          });
 
-        // Update conversation timestamp
         await db
           .update(kbConversations)
           .set({ updatedAt: new Date() })
           .where(eq(kbConversations.id, conversationId));
-      },
-    });
+      })
+      .catch(() => {
+        // Best-effort persistence — stream already sent to client
+      });
 
-    return response;
+    return streamResult.toUIMessageStreamResponse({
+      originalMessages: messages,
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Chat generation failed";

@@ -233,6 +233,11 @@ const builtinPluginManifestsRaw: PluginManifest[] = [
         required: false,
       },
     ],
+    sidebarItem: {
+      label: "Knowledge Base",
+      icon: "book-open",
+      path: "/knowledge-bases",
+    },
   },
 ];
 

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
   pgTable,
   uuid,
@@ -12,6 +13,12 @@ import { relations } from "drizzle-orm";
 import { workspaces } from "./workspaces";
 import { users } from "./users";
 import { tags } from "./tags";
+
+/** URL-safe 16-char random ID matching the AI SDK's default nanoid length. */
+function generateId(): string {
+  const bytes = randomBytes(12);
+  return bytes.toString("base64url").slice(0, 16);
+}
 
 export const knowledgeBases = pgTable(
   "knowledge_bases",
@@ -69,7 +76,7 @@ export const kbConversations = pgTable(
 export const kbMessages = pgTable(
   "kb_messages",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: text("id").primaryKey().$defaultFn(generateId),
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => kbConversations.id, { onDelete: "cascade" }),
