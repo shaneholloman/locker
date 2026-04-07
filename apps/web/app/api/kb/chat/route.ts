@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     // The .text promise resolves with the full generated text after
     // the stream finishes. We fire-and-forget but the Next.js runtime
     // keeps the function alive because the response stream is still open.
-    streamResult.text
+    Promise.resolve(streamResult.text)
       .then(async (fullText) => {
         await db
           .insert(kbMessages)
