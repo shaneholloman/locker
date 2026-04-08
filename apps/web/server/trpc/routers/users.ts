@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createRouter, protectedProcedure } from "../init";
 import {
@@ -32,7 +32,12 @@ export const usersRouter = createRouter({
     const [passwordAccount] = await ctx.db
       .select({ id: accounts.id })
       .from(accounts)
-      .where(eq(accounts.userId, ctx.userId))
+      .where(
+        and(
+          eq(accounts.userId, ctx.userId),
+          eq(accounts.providerId, "credential"),
+        ),
+      )
       .limit(1);
 
     return {
