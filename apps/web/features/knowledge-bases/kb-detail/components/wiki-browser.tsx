@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,10 +9,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function WikiBrowser({
   knowledgeBaseId,
+  initialPage,
 }: {
   knowledgeBaseId: string;
+  initialPage?: string | null;
 }) {
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialPage) setSelectedPage(initialPage);
+  }, [initialPage]);
 
   const { data: pages, isLoading: pagesLoading } =
     trpc.knowledgeBases.wikiPages.useQuery({ knowledgeBaseId });
@@ -84,6 +90,7 @@ export function WikiBrowser({
           <div className="p-6 md:px-10 md:py-8 prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-primary prose-code:before:content-none prose-code:after:content-none prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.85em] prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-img:rounded-lg">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              urlTransform={(url) => url}
               components={{
                 a: ({ href, children, ...props }) => {
                   if (href?.startsWith("wiki://")) {

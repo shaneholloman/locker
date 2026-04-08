@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   BookOpen,
   ArrowLeft,
@@ -24,11 +25,48 @@ import { LintResults, type LintResult } from "./components/lint-results";
 export function KBDetailPage({ id }: { id: string }) {
   const workspace = useWorkspace();
   const prefix = `/w/${workspace.slug}`;
+  const searchParams = useSearchParams();
   const utils = trpc.useUtils();
+
+  // Initialize from URL search params, then manage with React state
+  const [activeTab, setActiveTabState] = useState(
+    () => searchParams.get("tab") ?? "chat",
+  );
+  const [wikiPage, setWikiPage] = useState<string | null>(
+    () => searchParams.get("page") ?? null,
+  );
+
+  // Update URL without triggering Next.js navigation
+  const updateUrl = useCallback(
+    (tab: string, page?: string | null) => {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", tab);
+      if (page) params.set("page", page);
+      else params.delete("page");
+      window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+    },
+    [],
+  );
+
+  const setActiveTab = useCallback(
+    (tab: string) => {
+      setActiveTabState(tab);
+      updateUrl(tab, tab === "wiki" ? wikiPage : null);
+    },
+    [updateUrl, wikiPage],
+  );
+
+  const navigateToWikiPage = useCallback(
+    (pagePath: string) => {
+      setWikiPage(pagePath);
+      setActiveTabState("wiki");
+      updateUrl("wiki", pagePath);
+    },
+    [updateUrl],
+  );
 
   const { data: kb, isLoading } = trpc.knowledgeBases.get.useQuery({ id });
   const [lintResults, setLintResults] = useState<LintResult | null>(null);
-  const [activeTab, setActiveTab] = useState("chat");
 
   const ingestAllMutation = trpc.knowledgeBases.ingestAll.useMutation({
     onSuccess: (result) => {
@@ -162,10 +200,13 @@ export function KBDetailPage({ id }: { id: string }) {
           </div>
 
           <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
-            <ChatPanel knowledgeBaseId={id} />
+            <ChatPanel
+              knowledgeBaseId={id}
+              onNavigateToPage={navigateToWikiPage}
+            />
           </TabsContent>
           <TabsContent value="wiki" className="flex-1 overflow-hidden mt-0">
-            <WikiBrowser knowledgeBaseId={id} />
+            <WikiBrowser knowledgeBaseId={id} initialPage={wikiPage} />
           </TabsContent>
           <TabsContent value="sources" className="flex-1 overflow-auto mt-0">
             <SourceList knowledgeBaseId={id} />
@@ -184,7 +225,7 @@ export function KBDetailPage({ id }: { id: string }) {
           results={lintResults}
           onClose={() => setLintResults(null)}
           onNavigateToPage={(pagePath) => {
-            setActiveTab("wiki");
+            navigateToWikiPage(pagePath);
           }}
         />
       )}

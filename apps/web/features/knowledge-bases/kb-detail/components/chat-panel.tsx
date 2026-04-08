@@ -21,8 +21,10 @@ import { toast } from "sonner";
 
 export function ChatPanel({
   knowledgeBaseId,
+  onNavigateToPage,
 }: {
   knowledgeBaseId: string;
+  onNavigateToPage?: (pagePath: string) => void;
 }) {
   const utils = trpc.useUtils();
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -212,9 +214,10 @@ export function ChatPanel({
                                 : "dark:prose-invert",
                             )}
                           >
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {part.text}
-                            </ReactMarkdown>
+                            <WikiLinkedMarkdown
+                              content={part.text}
+                              onNavigateToPage={onNavigateToPage}
+                            />
                           </div>
                         );
                       }
@@ -283,5 +286,44 @@ export function ChatPanel({
         </>
       )}
     </div>
+  );
+}
+
+/** Renders markdown with clickable [[wiki-link]] support. */
+function WikiLinkedMarkdown({
+  content,
+  onNavigateToPage,
+}: {
+  content: string;
+  onNavigateToPage?: (pagePath: string) => void;
+}) {
+  // Split on [[...]] to get alternating text/link segments
+  const parts = content.split(/(\[\[[^\]]+\]\])/g);
+
+  return (
+    <>
+      {parts.map((segment, i) => {
+        const match = segment.match(/^\[\[([^\]]+)\]\]$/);
+        if (match) {
+          const slug = match[1];
+          const targetPath = slug.endsWith(".md") ? slug : `${slug}.md`;
+          return (
+            <button
+              key={i}
+              onClick={() => onNavigateToPage?.(targetPath)}
+              className="inline text-primary underline cursor-pointer hover:text-primary/80 font-medium"
+            >
+              {slug}
+            </button>
+          );
+        }
+        if (!segment) return null;
+        return (
+          <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+            {segment}
+          </ReactMarkdown>
+        );
+      })}
+    </>
   );
 }
