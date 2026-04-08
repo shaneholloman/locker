@@ -107,19 +107,22 @@ export const workspacesRouter = createRouter({
         role: "owner",
       });
 
-      // Auto-install FTS search plugin
-      const ftsManifest = getBuiltinPluginBySlug("fts-search");
-      if (ftsManifest) {
-        await ctx.db.insert(workspacePlugins).values({
-          workspaceId: workspace!.id,
-          installedById: ctx.userId,
-          pluginSlug: ftsManifest.slug,
-          source: ftsManifest.source,
-          manifest: ftsManifest,
-          grantedPermissions: ftsManifest.permissions,
-          config: {},
-          status: "active",
-        });
+      // Auto-install default plugins
+      const defaultPlugins = ["fts-search", "document-transcription"];
+      for (const slug of defaultPlugins) {
+        const manifest = getBuiltinPluginBySlug(slug);
+        if (manifest) {
+          await ctx.db.insert(workspacePlugins).values({
+            workspaceId: workspace!.id,
+            installedById: ctx.userId,
+            pluginSlug: manifest.slug,
+            source: manifest.source,
+            manifest,
+            grantedPermissions: manifest.permissions,
+            config: {},
+            status: "active",
+          });
+        }
       }
 
       return workspace!;
