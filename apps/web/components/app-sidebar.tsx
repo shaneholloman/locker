@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Share2,
   Upload,
-  LogOut,
   Settings,
   Users,
   Key,
@@ -25,9 +24,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/assets/logo";
-import { signOut } from "@/lib/auth/client";
 import { trpc } from "@/lib/trpc/client";
 import { StorageUsage } from "./storage-usage";
+import { UserMenu } from "./user-menu";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -377,36 +376,8 @@ export function AppSidebar({
           </div>
         )}
 
-        {/* Sign out */}
-        {collapsed ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={async () => {
-                  await signOut();
-                  router.push("/login");
-                }}
-                className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-              >
-                <LogOut className="size-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              Sign out
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <button
-            onClick={async () => {
-              await signOut();
-              router.push("/login");
-            }}
-            className="flex h-8 w-full items-center gap-2 rounded-lg p-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          >
-            <LogOut className="size-4 shrink-0" />
-            <span className="truncate">Sign out</span>
-          </button>
-        )}
+        {/* User menu */}
+        <UserMenu user={user} collapsed={collapsed} />
       </div>
 
     </div>
