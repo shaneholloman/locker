@@ -13,8 +13,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
 
-  const { data: pendingInvites, isLoading: invitesLoading } =
-    trpc.members.myPendingInvites.useQuery();
+  const { data: pendingInvites } = trpc.members.myPendingInvites.useQuery();
 
   const createWorkspace = trpc.workspaces.create.useMutation({
     onSuccess: (workspace) => {
@@ -65,11 +64,7 @@ export default function OnboardingPage() {
           </p>
 
           {/* Pending invites */}
-          {invitesLoading ? (
-            <div className="mb-4 flex items-center justify-center py-4">
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : hasInvites ? (
+          {hasInvites ? (
             <div className="mb-4 space-y-2">
               <label className="text-xs font-medium text-muted-foreground">
                 Pending invitations
