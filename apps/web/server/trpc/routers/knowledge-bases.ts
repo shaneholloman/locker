@@ -49,7 +49,11 @@ async function getKBWithAccess(
 }
 
 function validatePagePath(pagePath: string): void {
-  if (pagePath.includes("..") || pagePath.startsWith("/")) {
+  if (
+    pagePath.includes("..") ||
+    pagePath.startsWith("/") ||
+    !pagePath.endsWith(".md")
+  ) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid page path" });
   }
 }

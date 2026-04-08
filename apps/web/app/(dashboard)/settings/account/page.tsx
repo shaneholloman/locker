@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -27,11 +27,13 @@ export default function AccountSettingsPage() {
   const [email, setEmail] = useState("");
   const [initialized, setInitialized] = useState(false);
 
-  if (user && !initialized) {
-    setName(user.name ?? "");
-    setEmail(user.email);
-    setInitialized(true);
-  }
+  useEffect(() => {
+    if (user && !initialized) {
+      setName(user.name ?? "");
+      setEmail(user.email);
+      setInitialized(true);
+    }
+  }, [user, initialized]);
 
   const updateProfile = trpc.users.updateProfile.useMutation({
     onSuccess: () => {
