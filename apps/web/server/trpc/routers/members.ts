@@ -15,6 +15,7 @@ import {
 } from "@locker/database";
 import { inviteMemberSchema, updateMemberRoleSchema } from "@locker/common";
 import crypto from "crypto";
+import { createNotification } from "../../notifications";
 
 export const membersRouter = createRouter({
   list: workspaceProcedure.query(async ({ ctx }) => {
@@ -126,6 +127,45 @@ export const membersRouter = createRouter({
       } catch {
         // Email send failure is non-fatal - invite is still created
         console.error("Failed to send invitation email");
+      }
+
+      // Create in-app notification for the invited user (if they already have an account)
+      try {
+        const [invitedUser] = await ctx.db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, input.email))
+          .limit(1);
+
+        if (invitedUser) {
+          const [workspace] = await ctx.db
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(eq(workspaces.id, ctx.workspaceId));
+
+          const [inviter] = await ctx.db
+            .select({ name: users.name })
+            .from(users)
+            .where(eq(users.id, ctx.userId));
+
+          const wsName = workspace?.name ?? "a workspace";
+          const inviterName = inviter?.name ?? "Someone";
+
+          await createNotification({
+            userId: invitedUser.id,
+            type: "workspace_invite",
+            title: `${inviterName} invited you to ${wsName}`,
+            body: `You've been invited to join the "${wsName}" workspace as a ${input.role}.`,
+            actionUrl: `/invite/${token}`,
+            metadata: {
+              workspaceId: ctx.workspaceId,
+              inviteId: invite!.id,
+            },
+          });
+        }
+      } catch {
+        // Notification failure is non-fatal
+        console.error("Failed to create invite notification");
       }
 
       return invite;
