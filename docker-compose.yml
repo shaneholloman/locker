@@ -1,3 +1,5 @@
+name: locker
+
 services:
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   postgres:
@@ -17,8 +19,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── QMD (Semantic Search) ────────────────────────────────────────────────────
+  # ── QMD (Semantic Search — optional) ────────────────────────────────────────
+  # Enable with: docker compose --profile search up
   qmd:
+    profiles: ["search"]
     build:
       context: ./services/qmd
     restart: unless-stopped
@@ -26,7 +30,7 @@ services:
       - "9600:9600"
     environment:
       QMD_PORT: 9600
-      QMD_API_SECRET: ${QMD_API_SECRET:?Set QMD_API_SECRET in .env — generate with: openssl rand -base64 32}
+      QMD_API_SECRET: "${QMD_API_SECRET:-}"
     volumes:
       - qmd_data:/data/qmd
     healthcheck:
@@ -35,8 +39,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── FTS (Full-Text Search) ──────────────────────────────────────────────────
+  # ── FTS (Full-Text Search — optional) ──────────────────────────────────────
+  # Enable with: docker compose --profile search up
   fts:
+    profiles: ["search"]
     build:
       context: ./services/fts
     restart: unless-stopped
@@ -44,7 +50,7 @@ services:
       - "9700:9700"
     environment:
       FTS_PORT: 9700
-      FTS_API_SECRET: ${FTS_API_SECRET:?Set FTS_API_SECRET in .env — generate with: openssl rand -base64 32}
+      FTS_API_SECRET: "${FTS_API_SECRET:-}"
     volumes:
       - fts_data:/data/fts
     healthcheck:
@@ -79,16 +85,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-      qmd:
-        condition: service_healthy
-      fts:
-        condition: service_healthy
     environment:
       # Database
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/locker
 
       # Authentication — REQUIRED, no default
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env — generate with: openssl rand -base64 32}
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env — generate with: openssl rand -base64 32}"
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
 
       # App
@@ -115,11 +117,11 @@ services:
       # Vercel Blob (optional)
       BLOB_READ_WRITE_TOKEN: ${BLOB_READ_WRITE_TOKEN:-}
 
-      # Search services (internal Docker network)
-      QMD_SERVICE_URL: http://qmd:9600
-      QMD_API_SECRET: ${QMD_API_SECRET:?Set QMD_API_SECRET in .env}
-      FTS_SERVICE_URL: http://fts:9700
-      FTS_API_SECRET: ${FTS_API_SECRET:?Set FTS_API_SECRET in .env}
+      # Search services (optional — only needed when running with --profile search)
+      QMD_SERVICE_URL: ${QMD_SERVICE_URL:-}
+      QMD_API_SECRET: ${QMD_API_SECRET:-}
+      FTS_SERVICE_URL: ${FTS_SERVICE_URL:-}
+      FTS_API_SECRET: ${FTS_API_SECRET:-}
 
       # Email (optional)
       RESEND_API_KEY: ${RESEND_API_KEY:-}
