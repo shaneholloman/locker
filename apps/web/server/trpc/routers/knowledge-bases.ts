@@ -431,6 +431,78 @@ export const knowledgeBasesRouter = createRouter({
       }
     }),
 
+  wikiGraph: workspaceProcedure
+    .input(z.object({ knowledgeBaseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const kb = await getKBWithAccess(
+        ctx.db,
+        input.knowledgeBaseId,
+        ctx.workspaceId,
+      );
+
+      const { storage } = await createStorageForWorkspace(ctx.workspaceId);
+
+      // Parse the index to get the page list
+      let pages: Array<{ path: string; title: string }> = [];
+      try {
+        const { data } = await storage.download(
+          `${kb.wikiStoragePath}index.md`,
+        );
+        const indexContent = await streamToString(data);
+        const linkRegex = /^- \[(.+?)\]\((.+?)\)/gm;
+        let match: RegExpExecArray | null;
+        while ((match = linkRegex.exec(indexContent)) !== null) {
+          pages.push({ title: match[1], path: match[2] });
+        }
+      } catch {
+        return { nodes: [], edges: [] };
+      }
+
+      if (pages.length === 0) return { nodes: [], edges: [] };
+
+      // Build a slug→path lookup for resolving links
+      const slugToPath = new Map<string, string>();
+      for (const page of pages) {
+        slugToPath.set(page.path, page.path);
+        // Also map without .md extension
+        if (page.path.endsWith(".md")) {
+          slugToPath.set(page.path.slice(0, -3), page.path);
+        }
+      }
+
+      // Read each page content and extract [[links]]
+      const edges: Array<{ source: string; target: string }> = [];
+      const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+
+      await Promise.all(
+        pages.map(async (page) => {
+          try {
+            const { data } = await storage.download(
+              `${kb.wikiStoragePath}${page.path}`,
+            );
+            const content = await streamToString(data);
+            let linkMatch: RegExpExecArray | null;
+            while ((linkMatch = wikiLinkRegex.exec(content)) !== null) {
+              const slug = linkMatch[1];
+              const targetPath =
+                slugToPath.get(slug) ??
+                slugToPath.get(`${slug}.md`);
+              if (targetPath && targetPath !== page.path) {
+                edges.push({ source: page.path, target: targetPath });
+              }
+            }
+          } catch {
+            // Skip pages that can't be read
+          }
+        }),
+      );
+
+      return {
+        nodes: pages.map((p) => ({ id: p.path, label: p.title })),
+        edges,
+      };
+    }),
+
   wikiPage: workspaceProcedure
     .input(
       z.object({
