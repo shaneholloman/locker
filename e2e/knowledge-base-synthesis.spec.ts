@@ -125,9 +125,7 @@ test.describe.serial("Knowledge Base synthesis flows", () => {
     await page.getByPlaceholder("Choose a password").fill(TEST_USER.password);
     await page.getByRole("button", { name: /create account/i }).click();
     // Pre-dismiss KB announcement modal before workspace loads
-    await page.evaluate(() =>
-      localStorage.setItem("openstore:kb-announcement-dismissed", "1"),
-    );
+    await dismissKBAnnouncementViaStorage(page);
     await page.waitForURL("/onboarding", { timeout: 15000 });
     await page.getByPlaceholder("e.g. Acme Inc").fill("Synthesis Workspace");
     await page.getByRole("button", { name: /create workspace/i }).click();
@@ -555,6 +553,16 @@ async function loginAs(page: Page) {
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL(/\/w\//, { timeout: 15000 });
   await page.waitForTimeout(1000);
+}
+
+async function dismissKBAnnouncementViaStorage(page: Page) {
+  await page.addInitScript(() => {
+    const orig = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key: string) {
+      if (key.startsWith("locker:kb-announcement-dismissed")) return "1";
+      return orig.call(this, key);
+    };
+  });
 }
 
 async function navigateToKBDetail(page: Page) {

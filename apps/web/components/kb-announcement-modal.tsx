@@ -16,12 +16,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Dialog as DialogPrimitive } from "radix-ui";
 
-const STORAGE_KEY = "openstore:kb-announcement-dismissed";
+const STORAGE_KEY_PREFIX = "locker:kb-announcement-dismissed";
 
 export function KBAnnouncementModal() {
   const [open, setOpen] = useState(false);
   const workspace = useWorkspace();
   const router = useRouter();
+  const storageKey = `${STORAGE_KEY_PREFIX}:${workspace.id}`;
 
   const { data: installedPlugins, isLoading } =
     trpc.plugins.installed.useQuery();
@@ -29,7 +30,7 @@ export function KBAnnouncementModal() {
   useEffect(() => {
     if (isLoading) return;
 
-    const dismissed = localStorage.getItem(STORAGE_KEY);
+    const dismissed = localStorage.getItem(storageKey);
     if (dismissed) return;
 
     const hasKBPlugin = installedPlugins?.some(
@@ -40,15 +41,15 @@ export function KBAnnouncementModal() {
     // Small delay so the dashboard renders first
     const timer = setTimeout(() => setOpen(true), 800);
     return () => clearTimeout(timer);
-  }, [installedPlugins, isLoading]);
+  }, [installedPlugins, isLoading, storageKey]);
 
   function handleDismiss() {
-    localStorage.setItem(STORAGE_KEY, "1");
+    localStorage.setItem(storageKey, "1");
     setOpen(false);
   }
 
   function handleGetStarted() {
-    localStorage.setItem(STORAGE_KEY, "1");
+    localStorage.setItem(storageKey, "1");
     setOpen(false);
     router.push(`/w/${workspace.slug}/plugins`);
   }

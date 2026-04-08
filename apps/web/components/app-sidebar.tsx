@@ -42,6 +42,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+/**
+ * Maps plugin manifest icon names to Lucide components.
+ * Add entries here when a plugin uses a new icon name in its sidebarItem.
+ * Falls back to `Puzzle` if the icon name isn't found.
+ */
 const SIDEBAR_ICON_MAP: Record<string, LucideIcon> = {
   "book-open": BookOpen,
   brain: Brain,

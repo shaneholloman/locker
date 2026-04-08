@@ -312,7 +312,7 @@ export const knowledgeBasesRouter = createRouter({
       z.object({
         knowledgeBaseId: z.string().uuid(),
         pagePath: z.string().min(1),
-        content: z.string(),
+        content: z.string().max(500_000),
       }),
     )
     .mutation(async ({ ctx, input }) => {

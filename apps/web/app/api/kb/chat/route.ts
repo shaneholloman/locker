@@ -8,6 +8,7 @@ import {
   knowledgeBases,
   kbConversations,
   kbMessages,
+  workspaceMembers,
 } from "@locker/database";
 import { getHandler, buildPluginContext } from "../../../../server/plugins/runtime";
 
@@ -37,10 +38,22 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  // Verify KB access
+  // Verify KB exists and user has workspace access
   const [kb] = await db
-    .select()
+    .select({
+      id: knowledgeBases.id,
+      workspaceId: knowledgeBases.workspaceId,
+      wikiStoragePath: knowledgeBases.wikiStoragePath,
+      schemaPrompt: knowledgeBases.schemaPrompt,
+    })
     .from(knowledgeBases)
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.workspaceId, knowledgeBases.workspaceId),
+        eq(workspaceMembers.userId, session.user.id),
+      ),
+    )
     .where(eq(knowledgeBases.id, knowledgeBaseId))
     .limit(1);
 
@@ -158,8 +171,8 @@ export async function POST(req: NextRequest) {
           .set({ updatedAt: new Date() })
           .where(eq(kbConversations.id, conversationId));
       })
-      .catch(() => {
-        // Best-effort persistence — stream already sent to client
+      .catch((err) => {
+        console.error("[kb/chat] Failed to persist assistant message:", err);
       });
 
     return streamResult.toUIMessageStreamResponse({

@@ -29,9 +29,7 @@ test.describe.serial("Knowledge Base flows", () => {
     await page.getByRole("button", { name: /create account/i }).click();
 
     // Pre-dismiss the KB announcement modal via localStorage before workspace loads
-    await page.evaluate(() =>
-      localStorage.setItem("openstore:kb-announcement-dismissed", "1"),
-    );
+    await dismissKBAnnouncementViaStorage(page);
 
     // Onboard
     await page.waitForURL("/onboarding", { timeout: 15000 });
@@ -556,6 +554,18 @@ async function loginAs(page: Page) {
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL(/\/w\//, { timeout: 15000 });
   await page.waitForTimeout(1000);
+}
+
+async function dismissKBAnnouncementViaStorage(page: Page) {
+  // addInitScript runs before every page load in this context,
+  // so the patch survives navigations
+  await page.addInitScript(() => {
+    const orig = Storage.prototype.getItem;
+    Storage.prototype.getItem = function (key: string) {
+      if (key.startsWith("locker:kb-announcement-dismissed")) return "1";
+      return orig.call(this, key);
+    };
+  });
 }
 
 async function navigateToKBDetail(page: Page) {

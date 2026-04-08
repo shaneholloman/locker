@@ -102,7 +102,9 @@ export const knowledgeBaseHandler: PluginHandler = {
 
   async ingest(ctx, params) {
     const { storage } = ctx;
-    const { fileName, fileContent, wikiStoragePath, schemaPrompt } = params;
+    const { fileName, wikiStoragePath, schemaPrompt } = params;
+    // Truncate to ~100k chars to stay within model context limits
+    const fileContent = params.fileContent.slice(0, 100_000);
     const modelId = getModel(ctx);
 
     const indexContent =
