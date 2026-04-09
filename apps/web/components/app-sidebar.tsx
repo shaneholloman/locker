@@ -330,6 +330,12 @@ function WorkspaceNav({
   const navItems = [
     { href: prefix, label: "My Files", icon: FolderOpen, key: "files" },
     {
+      href: `${prefix}/chat`,
+      label: "AI Assistant",
+      icon: Bot,
+      key: "chat",
+    },
+    {
       href: `${prefix}/shared-links`,
       label: "Share Links",
       icon: Share2,
