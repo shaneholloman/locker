@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, asc } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { createRouter, workspaceProcedure, publicProcedure } from "../init";
 import { shareLinks, files, folders } from "@locker/database";
@@ -9,6 +9,29 @@ import { hashLinkPassword, verifyLinkPassword } from "../../security/password";
 
 function generateToken(): string {
   return randomBytes(SHARE_TOKEN_LENGTH).toString("hex");
+}
+
+/**
+ * Walk up the parentId chain to verify `childFolderId` is a descendant of
+ * `ancestorFolderId`. Returns true if they are the same folder.
+ */
+export async function isDescendantFolder(
+  db: ReturnType<typeof import("@locker/database/client").getDb>,
+  childFolderId: string,
+  ancestorFolderId: string,
+): Promise<boolean> {
+  if (childFolderId === ancestorFolderId) return true;
+  let currentId: string | null = childFolderId;
+  while (currentId) {
+    const [folder] = await db
+      .select({ parentId: folders.parentId })
+      .from(folders)
+      .where(eq(folders.id, currentId));
+    if (!folder) return false;
+    if (folder.parentId === ancestorFolderId) return true;
+    currentId = folder.parentId;
+  }
+  return false;
 }
 
 export const sharesRouter = createRouter({
@@ -188,6 +211,7 @@ export const sharesRouter = createRouter({
         size?: number;
         mimeType?: string;
         files?: { id: string; name: string; size: number; mimeType: string }[];
+        subfolders?: { id: string; name: string }[];
       } | null = null;
 
       if (link.fileId) {
@@ -217,12 +241,18 @@ export const sharesRouter = createRouter({
           })
           .from(files)
           .where(eq(files.folderId, link.folderId));
+        const subfolders = await ctx.db
+          .select({ id: folders.id, name: folders.name })
+          .from(folders)
+          .where(eq(folders.parentId, link.folderId))
+          .orderBy(asc(folders.name));
 
         if (folder) {
           sharedItem = {
             type: "folder",
             name: folder.name,
             files: folderFiles,
+            subfolders,
           };
         }
       }
@@ -236,6 +266,95 @@ export const sharesRouter = createRouter({
         .where(eq(shareLinks.id, link.id));
 
       return { item: sharedItem, access: link.access };
+    }),
+
+  // Public: browse into a subfolder of a shared folder
+  browseFolder: publicProcedure
+    .input(
+      z.object({
+        token: z.string(),
+        folderId: z.string().uuid(),
+        password: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [link] = await ctx.db
+        .select()
+        .from(shareLinks)
+        .where(eq(shareLinks.token, input.token));
+
+      if (!link || !link.isActive || !link.folderId) {
+        return { error: "Link not found or has been revoked" };
+      }
+
+      if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+        return { error: "This link has expired" };
+      }
+
+      if (link.hasPassword) {
+        if (!input.password) {
+          return { requiresPassword: true };
+        }
+        if (!verifyLinkPassword(input.password, link.passwordHash)) {
+          return { error: "Incorrect password" };
+        }
+      }
+
+      // Verify the requested folder is a descendant of the shared folder
+      const isDescendant = await isDescendantFolder(
+        ctx.db,
+        input.folderId,
+        link.folderId,
+      );
+      if (!isDescendant) {
+        return { error: "Folder not found" };
+      }
+
+      const [folder] = await ctx.db
+        .select({ id: folders.id, name: folders.name, parentId: folders.parentId })
+        .from(folders)
+        .where(eq(folders.id, input.folderId));
+
+      if (!folder) {
+        return { error: "Folder not found" };
+      }
+
+      const folderFiles = await ctx.db
+        .select({
+          id: files.id,
+          name: files.name,
+          size: files.size,
+          mimeType: files.mimeType,
+        })
+        .from(files)
+        .where(eq(files.folderId, input.folderId));
+
+      const subfolders = await ctx.db
+        .select({ id: folders.id, name: folders.name })
+        .from(folders)
+        .where(eq(folders.parentId, input.folderId))
+        .orderBy(asc(folders.name));
+
+      // Build breadcrumbs from shared root to current folder
+      const breadcrumbs: { id: string; name: string }[] = [];
+      let currentId: string | null = input.folderId;
+      while (currentId && currentId !== link.folderId) {
+        const [f] = await ctx.db
+          .select({ id: folders.id, name: folders.name, parentId: folders.parentId })
+          .from(folders)
+          .where(eq(folders.id, currentId));
+        if (!f) break;
+        breadcrumbs.unshift({ id: f.id, name: f.name });
+        currentId = f.parentId;
+      }
+
+      return {
+        folder: { id: folder.id, name: folder.name },
+        files: folderFiles,
+        subfolders,
+        breadcrumbs,
+        access: link.access,
+      };
     }),
 
   getDownloadUrl: publicProcedure
@@ -267,32 +386,44 @@ export const sharesRouter = createRouter({
         throw new Error("Download limit reached");
       }
 
-      const queryConditions = [
-        eq(files.workspaceId, link.workspaceId),
-        eq(files.status, "ready"),
-      ];
-
+      let fileId: string;
       if (link.fileId) {
         if (input.fileId && input.fileId !== link.fileId) {
           throw new Error("File not found");
         }
-        queryConditions.push(eq(files.id, link.fileId));
+        fileId = link.fileId;
       } else if (link.folderId) {
         if (!input.fileId) throw new Error("No file specified");
-        queryConditions.push(eq(files.id, input.fileId));
-        queryConditions.push(eq(files.folderId, link.folderId));
+        fileId = input.fileId;
       } else {
         throw new Error("Link target not found");
       }
 
-      const [file] = await ctx.db
+      const [targetFile] = await ctx.db
         .select()
         .from(files)
-        .where(and(...queryConditions));
-      if (!file) throw new Error("File not found");
+        .where(
+          and(
+            eq(files.id, fileId),
+            eq(files.workspaceId, link.workspaceId),
+            eq(files.status, "ready"),
+          ),
+        );
+      if (!targetFile) throw new Error("File not found");
 
-      const storage = await createStorageForFile(file.storageConfigId);
-      const url = await storage.getSignedUrl(file.storagePath, 3600);
+      // For folder shares, verify the file lives inside the shared folder tree
+      if (link.folderId) {
+        if (!targetFile.folderId) throw new Error("File not found");
+        const allowed = await isDescendantFolder(
+          ctx.db,
+          targetFile.folderId,
+          link.folderId,
+        );
+        if (!allowed) throw new Error("File not found");
+      }
+
+      const storage = await createStorageForFile(targetFile.storageConfigId);
+      const url = await storage.getSignedUrl(targetFile.storagePath, 3600);
 
       const [updated] = await ctx.db
         .update(shareLinks)
@@ -312,6 +443,6 @@ export const sharesRouter = createRouter({
         throw new Error("Download limit reached");
       }
 
-      return { url, filename: file.name };
+      return { url, filename: targetFile.name };
     }),
 });
