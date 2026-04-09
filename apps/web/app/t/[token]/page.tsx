@@ -278,7 +278,7 @@ export default function TrackedLinkPage({
         <div className="flex items-center gap-2 mb-6">
           <Logo className="size-5 text-primary" />
           <span className="title text-base">Locker</span>
-          <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-primary/5 text-primary rounded-sm ml-auto">
+          <span className="text-xs font-medium px-1.5 py-0.5 bg-primary/5 text-primary rounded-sm ml-auto">
             Shared
           </span>
         </div>
@@ -338,6 +338,15 @@ export default function TrackedLinkPage({
             {browseQuery.isLoading && isBrowsing ? (
               <div className="border rounded-sm p-6 text-center">
                 <div className="skeleton h-4 w-24 mx-auto rounded-sm" />
+              </div>
+            ) : isBrowsing && (browseQuery.isError || (browseQuery.data && "error" in browseQuery.data)) ? (
+              <div className="border rounded-sm p-6 text-center">
+                <AlertCircle className="h-5 w-5 text-red-400 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {browseQuery.data && "error" in browseQuery.data
+                    ? browseQuery.data.error
+                    : "Failed to load folder"}
+                </p>
               </div>
             ) : (
               <div className="border rounded-sm divide-y">

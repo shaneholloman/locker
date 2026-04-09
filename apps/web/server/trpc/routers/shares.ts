@@ -17,6 +17,9 @@ type Db = ReturnType<typeof import("@locker/database/client").getDb>;
  * Verify `childFolderId` is equal to or a descendant of `ancestorFolderId`
  * using a single recursive CTE instead of N sequential queries.
  */
+/** Max folder nesting depth — guards against cyclic parent_id chains. */
+const MAX_FOLDER_DEPTH = 100;
+
 export async function isDescendantFolder(
   db: Db,
   childFolderId: string,
@@ -25,11 +28,12 @@ export async function isDescendantFolder(
   if (childFolderId === ancestorFolderId) return true;
   const result = await db.execute(sql`
     WITH RECURSIVE ancestors AS (
-      SELECT id, parent_id FROM folders WHERE id = ${childFolderId}
+      SELECT id, parent_id, 1 AS depth FROM folders WHERE id = ${childFolderId}
       UNION ALL
-      SELECT f.id, f.parent_id
+      SELECT f.id, f.parent_id, a.depth + 1
       FROM folders f
       JOIN ancestors a ON f.id = a.parent_id
+      WHERE a.depth < ${MAX_FOLDER_DEPTH}
     )
     SELECT 1 AS found FROM ancestors WHERE parent_id = ${ancestorFolderId} LIMIT 1
   `);
@@ -53,7 +57,7 @@ export async function buildBreadcrumbs(
       SELECT f.id, f.name, f.parent_id, a.depth + 1
       FROM folders f
       JOIN ancestors a ON f.id = a.parent_id
-      WHERE a.id != ${rootFolderId}
+      WHERE a.id != ${rootFolderId} AND a.depth < ${MAX_FOLDER_DEPTH}
     )
     SELECT id, name FROM ancestors WHERE id != ${rootFolderId} ORDER BY depth DESC
   `);
