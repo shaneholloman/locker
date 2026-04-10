@@ -170,10 +170,20 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Input container */}
+        {/* Input container — clicking anywhere non-interactive focuses the textarea */}
         <div
+          onClick={(e) => {
+            if (
+              !(e.target instanceof HTMLButtonElement) &&
+              !(e.target instanceof HTMLTextAreaElement) &&
+              !(e.target instanceof HTMLInputElement) &&
+              !(e.target as HTMLElement).closest?.("button")
+            ) {
+              textareaRef.current?.focus();
+            }
+          }}
           className={cn(
-            "rounded-2xl border bg-background shadow-sm transition-all",
+            "rounded-2xl border bg-background shadow-sm transition-all cursor-text",
             isFocused ? "border-border shadow-md" : "border-border/60",
             disabled && "opacity-50",
           )}
