@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { tool } from "ai";
 import { z } from "zod/v4";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { shareLinks, files, folders } from "@locker/database";
 import { hashLinkPassword } from "../../security/password";
 import type { AssistantToolContext } from "./types";
@@ -120,46 +120,59 @@ export function createShareTools(ctx: AssistantToolContext) {
           .orderBy(desc(shareLinks.createdAt))
           .limit(50);
 
-        const enriched = await Promise.all(
-          links.map(async (link) => {
-            let itemName = "Unknown";
-            let itemType: "file" | "folder" = "file";
+        // Batch-fetch file and folder names to avoid N+1 queries
+        const fileIds = links
+          .map((l) => l.fileId)
+          .filter((id): id is string => id != null);
+        const folderIds = links
+          .map((l) => l.folderId)
+          .filter((id): id is string => id != null);
 
-            if (link.fileId) {
-              const [file] = await ctx.db
-                .select({ name: files.name })
-                .from(files)
-                .where(eq(files.id, link.fileId))
-                .limit(1);
-              if (file) itemName = file.name;
-            } else if (link.folderId) {
-              const [folder] = await ctx.db
-                .select({ name: folders.name })
-                .from(folders)
-                .where(eq(folders.id, link.folderId))
-                .limit(1);
-              if (folder) {
-                itemName = folder.name;
-                itemType = "folder";
-              }
-            }
+        const fileNameMap = new Map<string, string>();
+        const folderNameMap = new Map<string, string>();
 
-            return {
-              id: link.id,
-              token: link.token,
-              itemName,
-              itemType,
-              access: link.access,
-              isActive: link.isActive,
-              hasPassword: link.hasPassword,
-              expiresAt: link.expiresAt,
-              downloadCount: link.downloadCount,
-              maxDownloads: link.maxDownloads,
-              shareUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shared/${link.token}`,
-              createdAt: link.createdAt,
-            };
-          }),
-        );
+        if (fileIds.length > 0) {
+          const fileRows = await ctx.db
+            .select({ id: files.id, name: files.name })
+            .from(files)
+            .where(inArray(files.id, fileIds));
+          for (const f of fileRows) fileNameMap.set(f.id, f.name);
+        }
+
+        if (folderIds.length > 0) {
+          const folderRows = await ctx.db
+            .select({ id: folders.id, name: folders.name })
+            .from(folders)
+            .where(inArray(folders.id, folderIds));
+          for (const f of folderRows) folderNameMap.set(f.id, f.name);
+        }
+
+        const enriched = links.map((link) => {
+          let itemName = "Unknown";
+          let itemType: "file" | "folder" = "file";
+
+          if (link.fileId) {
+            itemName = fileNameMap.get(link.fileId) ?? "Unknown";
+          } else if (link.folderId) {
+            itemName = folderNameMap.get(link.folderId) ?? "Unknown";
+            itemType = "folder";
+          }
+
+          return {
+            id: link.id,
+            token: link.token,
+            itemName,
+            itemType,
+            access: link.access,
+            isActive: link.isActive,
+            hasPassword: link.hasPassword,
+            expiresAt: link.expiresAt,
+            downloadCount: link.downloadCount,
+            maxDownloads: link.maxDownloads,
+            shareUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shared/${link.token}`,
+            createdAt: link.createdAt,
+          };
+        });
 
         return { shareLinks: enriched };
       },

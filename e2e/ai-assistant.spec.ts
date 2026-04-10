@@ -245,9 +245,9 @@ test.describe.serial("AI Assistant chat flows", () => {
     await textarea.press("Enter");
     await page.waitForTimeout(2000);
 
-    // The user message should appear in the chat
+    // The user message should appear in the chat (also appears in sidebar auto-title)
     await expect(
-      page.getByText("Hello, this is a test message!"),
+      page.getByText("Hello, this is a test message!").first(),
     ).toBeVisible({ timeout: 10000 });
 
     // The "You" label should appear for the user message

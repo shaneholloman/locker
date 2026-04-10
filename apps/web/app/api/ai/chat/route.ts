@@ -19,8 +19,17 @@ import { gateway, DEFAULT_MODEL } from "../../../../server/ai/gateway";
 import { createAssistantTools } from "../../../../server/ai/tools";
 import { buildAssistantSystemPrompt } from "../../../../server/ai/system-prompt";
 
+const ALLOWED_MODELS = [
+  "openai/gpt-4o",
+  "openai/gpt-4o-mini",
+  "anthropic/claude-sonnet-4-20250514",
+  "anthropic/claude-haiku-3-5-20241022",
+  "google/gemini-2.0-flash",
+];
+
 export async function POST(req: NextRequest) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const reqHeaders = await headers();
+  const session = await auth.api.getSession({ headers: reqHeaders });
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -42,7 +51,6 @@ export async function POST(req: NextRequest) {
   const db = getDb();
 
   // Resolve workspace from header
-  const reqHeaders = await headers();
   const slug = reqHeaders.get("x-workspace-slug");
   if (!slug) {
     return NextResponse.json(
@@ -144,7 +152,10 @@ export async function POST(req: NextRequest) {
     workspaceSlug: membership.slug,
   });
 
-  const modelId = model ?? conversation.model ?? DEFAULT_MODEL;
+  const requestedModel = model ?? conversation.model ?? DEFAULT_MODEL;
+  const modelId = ALLOWED_MODELS.includes(requestedModel)
+    ? requestedModel
+    : DEFAULT_MODEL;
   const modelMessages = await convertToModelMessages(messages);
 
   try {

@@ -93,6 +93,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     () =>
       new DefaultChatTransport({
         api: "/api/ai/chat",
+        headers: { "x-workspace-slug": workspaceSlug },
         body: transportBody.current,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,10 +111,12 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     },
   });
 
-  // Reset messages when conversation changes
+  // Reset messages when conversation changes — scoped to conversationId only
+  // to avoid clobbering in-flight streamed messages on background refetches.
   useEffect(() => {
     setMessages(initialMessages);
-  }, [conversationId, initialMessages, setMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   // --- Auto-scroll ---
   const scrollRef = useRef<HTMLDivElement>(null);
