@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { PanelLeftClose, PanelLeft, PanelRightClose } from "lucide-react";
+import { parseAsString, useQueryState } from "nuqs";
 import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,7 +29,10 @@ import { EmptyState } from "./empty-state";
 
 export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
   const utils = trpc.useUtils();
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useQueryState(
+    "c",
+    parseAsString,
+  );
   const [inputValue, setInputValue] = useState("");
   const [selectedModel, setSelectedModel] = useState<ModelId>(
     AVAILABLE_MODELS[0].id,
