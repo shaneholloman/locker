@@ -56,7 +56,7 @@ export function ConversationSidebar({
   return (
     <div className="flex h-full flex-col border-r bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b">
+      <div className="flex h-12 items-center justify-between px-3 border-b">
         <h2 className="text-sm font-semibold text-foreground">Chats</h2>
         <Button
           size="sm"

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 import { ConversationSidebar } from "./conversation-sidebar";
 import { ChatMessage, StreamingIndicator } from "./chat-message";
+import { FilePreviewPanel } from "./file-preview-panel";
 import {
   ChatInput,
   AVAILABLE_MODELS,
@@ -29,6 +30,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   // --- Data fetching ---
   const { data: conversations = [] } = trpc.assistant.conversations.useQuery();
@@ -247,7 +249,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
       {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b bg-background">
+        <div className="flex h-12 items-center gap-2 px-3 border-b bg-background">
           <Button
             size="sm"
             variant="ghost"
@@ -283,6 +285,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
                       [key: string]: unknown;
                     }>
                   }
+                  onFileClick={setPreviewFileId}
                 />
               ))}
               {isStreaming &&
@@ -308,6 +311,17 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
           onRemoveAttachment={handleRemoveAttachment}
         />
       </div>
+
+      {/* File preview side panel */}
+      {previewFileId && (
+        <div className="w-[480px] shrink-0">
+          <FilePreviewPanel
+            fileId={previewFileId}
+            workspaceSlug={workspaceSlug}
+            onClose={() => setPreviewFileId(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

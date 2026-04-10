@@ -188,9 +188,11 @@ function MarkdownContent({ content }: { content: string }) {
 export function ChatMessage({
   role,
   parts,
+  onFileClick,
 }: {
   role: string;
   parts: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  onFileClick?: (fileId: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const isUser = role === "user";
@@ -231,17 +233,46 @@ export function ChatMessage({
             return <MarkdownContent key={idx} content={part.text ?? ""} />;
           }
 
-          if (part.type === "tool-invocation") {
+          // AI SDK v6 "tool-invocation" format (from DB persistence)
+          if (part.type === "tool-invocation" && part.toolInvocation) {
             const invocation = part.toolInvocation as {
               toolCallId: string;
               toolName: string;
               args: Record<string, unknown>;
+              input?: Record<string, unknown>;
               state: string;
               result?: unknown;
+              output?: unknown;
             };
-            return <ToolInvocation key={idx} invocation={invocation} />;
+            return (
+              <ToolInvocation
+                key={idx}
+                invocation={invocation}
+                onFileClick={onFileClick}
+              />
+            );
           }
 
+          // AI SDK v6 streamed format: "tool-{toolName}" with data at top level
+          if (part.type.startsWith("tool-") && part.toolCallId) {
+            const toolName = part.type.replace("tool-", "");
+            return (
+              <ToolInvocation
+                key={idx}
+                invocation={{
+                  toolCallId: part.toolCallId as string,
+                  toolName,
+                  args: (part.rawInput ?? part.input ?? {}) as Record<string, unknown>,
+                  input: (part.input ?? {}) as Record<string, unknown>,
+                  state: part.state as string,
+                  output: part.output as unknown,
+                }}
+                onFileClick={onFileClick}
+              />
+            );
+          }
+
+          // Skip step-start and other non-renderable parts
           return null;
         })}
 
