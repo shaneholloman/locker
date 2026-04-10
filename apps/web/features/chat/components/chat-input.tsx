@@ -45,6 +45,7 @@ interface ChatInputProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onStop?: () => void;
   model: ModelId;
   onModelChange: (model: ModelId) => void;
   disabled?: boolean;
@@ -60,6 +61,7 @@ export function ChatInput({
   value,
   onChange,
   onSubmit,
+  onStop,
   model,
   onModelChange,
   disabled = false,
@@ -209,6 +211,7 @@ export function ChatInput({
               {isSending ? (
                 <button
                   type="button"
+                  onClick={onStop}
                   className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted transition-colors"
                   title="Stop generating"
                 >

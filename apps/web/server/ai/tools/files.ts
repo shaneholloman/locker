@@ -18,7 +18,7 @@ export function createFileTools(ctx: AssistantToolContext) {
         query: z.string().min(1).describe("Search query"),
       }),
       execute: async ({ query }) => {
-        const escapedQuery = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
+        const escapedQuery = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 
         // Search via plugins (QMD and FTS) in parallel
         const qmdEndpoint = await resolvePluginEndpoint(
@@ -96,7 +96,7 @@ export function createFileTools(ctx: AssistantToolContext) {
                     ...words.map((w) =>
                       ilike(
                         fileTranscriptions.content,
-                        `%${w.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`,
+                        `%${w.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_")}%`,
                       ),
                     ),
                   ),
@@ -422,7 +422,12 @@ export function createFileTools(ctx: AssistantToolContext) {
         }
 
         // Delete DB record
-        await ctx.db.delete(files).where(eq(files.id, fileId));
+        await ctx.db.delete(files).where(
+          and(
+            eq(files.id, fileId),
+            eq(files.workspaceId, ctx.workspaceId),
+          ),
+        );
 
         // Update workspace storage usage
         await ctx.db

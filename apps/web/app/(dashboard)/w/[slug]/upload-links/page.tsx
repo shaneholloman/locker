@@ -96,7 +96,7 @@ export default function UploadLinksPage() {
               </div>
             ))}
           </div>
-        ) : links.length === 0 ? (
+        ) : !links || links.length === 0 ? (
           <div className="rounded-lg border bg-card flex flex-col items-center justify-center py-20 text-center">
             <Upload className="size-8 text-muted-foreground/50 mb-3" />
             <p className="text-sm text-muted-foreground">

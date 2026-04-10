@@ -116,7 +116,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     [workspaceSlug],
   );
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, stop, status, setMessages } = useChat({
     transport,
     messages: initialMessages,
     id: conversationId ?? undefined,
@@ -400,6 +400,7 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={handleSend}
+                onStop={stop}
                 model={selectedModel}
                 onModelChange={setSelectedModel}
                 disabled={false}
