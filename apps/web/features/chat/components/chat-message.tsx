@@ -211,7 +211,7 @@ export function ChatMessage({
     return (
       <div className="flex justify-end px-4 md:px-6 py-4">
         <div className="max-w-[85%] md:max-w-[70%]">
-          <div className="rounded-2xl rounded-br-md bg-muted/70 px-4 py-3">
+          <div className="rounded-2xl rounded-br-md bg-foreground/[0.07] px-4 py-3">
             <p className="text-[15px] leading-[1.65] text-foreground whitespace-pre-wrap">
               {fullText}
             </p>
