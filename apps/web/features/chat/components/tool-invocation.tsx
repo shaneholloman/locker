@@ -180,34 +180,54 @@ export function ToolInvocation({
     ? extractFiles(invocation.toolName, toolOutput)
     : null;
 
+  // Determine if there's expandable content (input or output data)
+  const hasExpandableContent =
+    (toolInput &&
+      typeof toolInput === "object" &&
+      Object.keys(toolInput as object).length > 0) ||
+    hasResult;
+
+  const label = isComplete && resultSummary ? resultSummary : meta.label;
+
   return (
     <div className="my-3">
-      {/* Collapsed row — subtle, inline */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="group/tool flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {isComplete ? (
-          hasError ? (
-            <AlertCircle className="size-3.5 text-destructive shrink-0" />
+      {/* Tool invocation row */}
+      {hasExpandableContent ? (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="group/tool flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {isComplete ? (
+            hasError ? (
+              <AlertCircle className="size-3.5 text-destructive shrink-0" />
+            ) : (
+              <CheckCircle2 className="size-3.5 text-primary/60 shrink-0" />
+            )
           ) : (
-            <CheckCircle2 className="size-3.5 text-primary/60 shrink-0" />
-          )
-        ) : (
-          <Loader2 className="size-3.5 animate-spin shrink-0" />
-        )}
-
-        <span>
-          {isComplete && resultSummary ? resultSummary : meta.label}
-        </span>
-
-        <ChevronRight
-          className={cn(
-            "size-3 transition-transform",
-            expanded && "rotate-90",
+            <Loader2 className="size-3.5 animate-spin shrink-0" />
           )}
-        />
-      </button>
+          <span>{label}</span>
+          <ChevronRight
+            className={cn(
+              "size-3 transition-transform",
+              expanded && "rotate-90",
+            )}
+          />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {isComplete ? (
+            hasError ? (
+              <AlertCircle className="size-3.5 text-destructive shrink-0" />
+            ) : (
+              <CheckCircle2 className="size-3.5 text-primary/60 shrink-0" />
+            )
+          ) : (
+            <Loader2 className="size-3.5 animate-spin shrink-0" />
+          )}
+          <span>{label}</span>
+        </div>
+      )}
 
       {/* File preview cards — shown inline when tool returns files */}
       {fileCards && fileCards.length > 0 && (
