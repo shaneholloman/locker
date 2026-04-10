@@ -160,6 +160,10 @@ export function ChatPage({ workspaceSlug }: { workspaceSlug: string }) {
     const currentAttachments = [...attachments];
     setInputValue("");
     setAttachments([]);
+    // Revoke object URLs to avoid memory leaks
+    for (const att of currentAttachments) {
+      if (att.preview) URL.revokeObjectURL(att.preview);
+    }
 
     // Show the user message instantly while async work happens
     setPendingMessage({

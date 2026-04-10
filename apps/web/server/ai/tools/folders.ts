@@ -154,20 +154,21 @@ export function createFolderTools(ctx: AssistantToolContext) {
             return { error: "Cannot move a folder into itself" };
           }
 
-          // Walk ancestors to check for circular reference
+          // Fetch all workspace folders once, then walk ancestors in-memory
+          const allFolders = await ctx.db
+            .select({ id: folders.id, parentId: folders.parentId })
+            .from(folders)
+            .where(eq(folders.workspaceId, ctx.workspaceId));
+
+          const parentMap = new Map(allFolders.map((f) => [f.id, f.parentId]));
           let currentId: string | null = targetFolderId;
           while (currentId) {
-            const [ancestor] = await ctx.db
-              .select({ parentId: folders.parentId })
-              .from(folders)
-              .where(eq(folders.id, currentId))
-              .limit(1);
-
-            if (!ancestor) break;
-            if (ancestor.parentId === folderId) {
+            const parentId = parentMap.get(currentId);
+            if (parentId === undefined) break;
+            if (parentId === folderId) {
               return { error: "Cannot move a folder into one of its children" };
             }
-            currentId = ancestor.parentId;
+            currentId = parentId;
           }
         }
 

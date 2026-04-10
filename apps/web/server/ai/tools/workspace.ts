@@ -74,7 +74,6 @@ export function createWorkspaceTools(ctx: AssistantToolContext) {
             role: workspaceMembers.role,
             createdAt: workspaceMembers.createdAt,
             userName: users.name,
-            userEmail: users.email,
           })
           .from(workspaceMembers)
           .innerJoin(users, eq(users.id, workspaceMembers.userId))
