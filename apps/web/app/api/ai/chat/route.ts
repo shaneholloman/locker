@@ -156,9 +156,22 @@ export async function POST(req: NextRequest) {
   const modelId = ALLOWED_MODELS.includes(requestedModel)
     ? requestedModel
     : DEFAULT_MODEL;
-  const modelMessages = await convertToModelMessages(messages);
 
   try {
+    // Strip tool-invocation parts from persisted messages before converting.
+    // The LLM only needs the text output; tool call details are UI-only and
+    // their format doesn't survive the UIMessage → ModelMessage conversion.
+    const cleanedMessages = messages.map((msg) => {
+      if (msg.role !== "assistant" || !Array.isArray(msg.parts)) return msg;
+      const textParts = msg.parts.filter(
+        (p: any) => p.type === "text" && p.text,
+      );
+      if (textParts.length === 0) return null;
+      return { ...msg, parts: textParts };
+    }).filter(Boolean) as UIMessage[];
+
+    const modelMessages = await convertToModelMessages(cleanedMessages);
+
     const result = streamText({
       model: gateway(modelId),
       system: systemPrompt,

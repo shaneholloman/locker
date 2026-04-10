@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod/v4";
-import { eq, and, asc, desc, ilike, inArray, sql, isNull } from "drizzle-orm";
-import { files, folders, workspaces } from "@locker/database";
+import { eq, and, asc, desc, ilike, inArray, sql, isNull, or } from "drizzle-orm";
+import { files, folders, workspaces, fileTranscriptions } from "@locker/database";
 import { resolvePluginEndpoint } from "../../plugins/resolve-endpoint";
 import { qmdClient } from "../../plugins/handlers/qmd-client";
 import { ftsClient } from "../../plugins/handlers/fts-client";
@@ -59,7 +59,7 @@ export function createFileTools(ctx: AssistantToolContext) {
             : [],
         ]);
 
-        // Merge content results
+        // Merge content results from search plugins
         const scoreMap = new Map<
           string,
           { score: number; snippet?: string }
@@ -68,6 +68,60 @@ export function createFileTools(ctx: AssistantToolContext) {
           const existing = scoreMap.get(r.fileId);
           if (!existing || r.score > existing.score) {
             scoreMap.set(r.fileId, { score: r.score, snippet: r.snippet });
+          }
+        }
+
+        // Fallback: if no search plugins returned results, search
+        // the file_transcriptions table directly for content matches.
+        // This covers environments without QMD/FTS services.
+        const transcriptionSnippets = new Map<string, string>();
+        if (scoreMap.size === 0) {
+          const words = query
+            .split(/\s+/)
+            .filter((w) => w.length > 1);
+
+          if (words.length > 0) {
+            // Search transcriptions for any of the query words
+            const transcriptionHits = await ctx.db
+              .select({
+                fileId: fileTranscriptions.fileId,
+                content: fileTranscriptions.content,
+              })
+              .from(fileTranscriptions)
+              .where(
+                and(
+                  eq(fileTranscriptions.workspaceId, ctx.workspaceId),
+                  eq(fileTranscriptions.status, "completed"),
+                  or(
+                    ...words.map((w) =>
+                      ilike(
+                        fileTranscriptions.content,
+                        `%${w.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .limit(20);
+
+            for (const hit of transcriptionHits) {
+              scoreMap.set(hit.fileId, { score: 1, snippet: undefined });
+              // Extract a snippet around the first matching word
+              const lowerContent = hit.content.toLowerCase();
+              for (const w of words) {
+                const idx = lowerContent.indexOf(w.toLowerCase());
+                if (idx !== -1) {
+                  const start = Math.max(0, idx - 60);
+                  const end = Math.min(hit.content.length, idx + w.length + 60);
+                  const snippet =
+                    (start > 0 ? "..." : "") +
+                    hit.content.slice(start, end).trim() +
+                    (end < hit.content.length ? "..." : "");
+                  transcriptionSnippets.set(hit.fileId, snippet);
+                  break;
+                }
+              }
+            }
           }
         }
 
@@ -126,12 +180,17 @@ export function createFileTools(ctx: AssistantToolContext) {
           const contentInfo = scoreMap.get(file.id);
           return {
             ...file,
-            snippet: contentInfo?.snippet ?? null,
+            snippet:
+              contentInfo?.snippet ??
+              transcriptionSnippets.get(file.id) ??
+              null,
             contentScore: contentInfo?.score ?? null,
           };
         });
 
-        allResults.sort((a, b) => (b.contentScore ?? 0) - (a.contentScore ?? 0));
+        allResults.sort(
+          (a, b) => (b.contentScore ?? 0) - (a.contentScore ?? 0),
+        );
 
         return { files: allResults.slice(0, 20) };
       },

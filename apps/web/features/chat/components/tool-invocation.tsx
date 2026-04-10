@@ -158,26 +158,37 @@ export function ToolInvocation({
 
       {/* Expanded details */}
       {expanded && (
-        <div className="mt-2 ml-5.5 space-y-2 text-xs">
-          <div>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Arguments
-            </span>
-            <pre className="mt-1 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground overflow-auto max-h-[200px]">
-              {JSON.stringify(invocation.args, null, 2)}
-            </pre>
-          </div>
+        <div className="mt-2 ml-6 space-y-2 text-xs">
+          {invocation.args &&
+            Object.keys(invocation.args).length > 0 && (
+              <div>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Input
+                </span>
+                <pre className="mt-1 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground overflow-auto max-h-[200px]">
+                  {JSON.stringify(invocation.args, null, 2)}
+                </pre>
+              </div>
+            )}
 
           {hasResult && (
             <div>
               <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                Result
+                Output
               </span>
               <pre className="mt-1 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground overflow-auto max-h-[300px]">
                 {JSON.stringify(invocation.result, null, 2)}
               </pre>
             </div>
           )}
+
+          {(!invocation.args ||
+            Object.keys(invocation.args).length === 0) &&
+            !hasResult && (
+              <span className="text-[11px] text-muted-foreground italic">
+                No details available
+              </span>
+            )}
         </div>
       )}
     </div>
