@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
                     toolName: tcAny.toolName,
                     args: tcAny.args,
                     state: "result",
-                    result: tr?.result ?? null,
+                    result: tr?.output ?? tr?.result ?? null,
                   },
                 });
               }
