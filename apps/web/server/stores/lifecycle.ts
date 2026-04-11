@@ -13,6 +13,7 @@ import {
   createStorageForFile,
   getActiveStores,
   getFileStoragePath,
+  getPrimaryStore,
   getStoreById,
 } from "../storage";
 import { resolvePluginEndpoint } from "../plugins/resolve-endpoint";
@@ -177,6 +178,7 @@ export async function deleteFileEverywhere(params: {
       blobId: files.blobId,
       name: files.name,
       size: files.size,
+      storagePath: files.storagePath,
     })
     .from(files)
     .where(
@@ -195,6 +197,16 @@ export async function deleteFileEverywhere(params: {
     .from(blobLocations)
     .innerJoin(stores, eq(blobLocations.storeId, stores.id))
     .where(eq(blobLocations.blobId, file.blobId));
+
+  if (locations.length === 0 && file.storagePath) {
+    // Pre-migration platform files may have no blob_locations yet.
+    try {
+      const primary = await getPrimaryStore(params.workspaceId);
+      await primary.storage.delete(file.storagePath);
+    } catch {
+      // best-effort
+    }
+  }
 
   for (const location of locations) {
     if (location.writeMode === "read_only") {

@@ -378,40 +378,42 @@ export const storesRouter = createRouter({
   remove: workspaceAdminProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const activeStores = await ctx.db
-        .select({ id: stores.id })
-        .from(stores)
-        .where(and(eq(stores.workspaceId, ctx.workspaceId), eq(stores.status, "active")));
+      return ctx.db.transaction(async (tx) => {
+        const activeStores = await tx
+          .select({ id: stores.id })
+          .from(stores)
+          .where(and(eq(stores.workspaceId, ctx.workspaceId), eq(stores.status, "active")));
 
-      if (activeStores.length <= 1) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "A workspace must keep at least one active store",
-        });
-      }
+        if (activeStores.length <= 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A workspace must keep at least one active store",
+          });
+        }
 
-      const [settings] = await ctx.db
-        .select({ primaryStoreId: workspaceStorageSettings.primaryStoreId })
-        .from(workspaceStorageSettings)
-        .where(eq(workspaceStorageSettings.workspaceId, ctx.workspaceId))
-        .limit(1);
+        const [settings] = await tx
+          .select({ primaryStoreId: workspaceStorageSettings.primaryStoreId })
+          .from(workspaceStorageSettings)
+          .where(eq(workspaceStorageSettings.workspaceId, ctx.workspaceId))
+          .limit(1);
 
-      if (settings?.primaryStoreId === input.id) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Set another store as primary before removing this one",
-        });
-      }
+        if (settings?.primaryStoreId === input.id) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Set another store as primary before removing this one",
+          });
+        }
 
-      await ctx.db
-        .update(stores)
-        .set({
-          status: "archived",
-          updatedAt: new Date(),
-        })
-        .where(and(eq(stores.id, input.id), eq(stores.workspaceId, ctx.workspaceId)));
+        await tx
+          .update(stores)
+          .set({
+            status: "archived",
+            updatedAt: new Date(),
+          })
+          .where(and(eq(stores.id, input.id), eq(stores.workspaceId, ctx.workspaceId)));
 
-      return { success: true };
+        return { success: true };
+      });
     }),
 
   setPrimary: workspaceAdminProcedure
