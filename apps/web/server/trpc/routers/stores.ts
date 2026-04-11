@@ -358,6 +358,7 @@ export const storesRouter = createRouter({
           .set({
             name: input.store.name,
             provider: input.store.provider,
+            ...(input.store.credentials ? { credentialSource: "store" as const } : {}),
             writeMode: input.store.writeMode,
             ingestMode: input.store.ingestMode,
             readPriority: input.store.readPriority,
