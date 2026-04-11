@@ -241,14 +241,17 @@ async function getFileLocationContext(
 
   if (locations.length === 0) {
     const primary = await getPrimaryStore(file.workspaceId);
-    await db.insert(blobLocations).values({
-      blobId: file.blobId,
-      storeId: primary.store.id,
-      storagePath: file.storagePath,
-      state: "available",
-      origin: "primary_upload",
-      lastVerifiedAt: new Date(),
-    });
+    await db
+      .insert(blobLocations)
+      .values({
+        blobId: file.blobId,
+        storeId: primary.store.id,
+        storagePath: file.storagePath,
+        state: "available",
+        origin: "primary_upload",
+        lastVerifiedAt: new Date(),
+      })
+      .onConflictDoNothing();
 
     return {
       fileId: file.id,

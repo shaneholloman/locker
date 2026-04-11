@@ -31,37 +31,39 @@ export async function createPendingFileUpload(params: {
   const primary = await createStorageForWorkspace(workspaceId);
   const storagePath = buildStoragePathForStore(primary.store, objectKey);
 
-  await db.insert(fileBlobs).values({
-    id: blobId,
-    workspaceId,
-    createdById: userId,
-    objectKey,
-    byteSize: params.size,
-    mimeType: params.mimeType,
-    state: params.status === "ready" ? "ready" : "pending",
-  });
+  await db.transaction(async (tx) => {
+    await tx.insert(fileBlobs).values({
+      id: blobId,
+      workspaceId,
+      createdById: userId,
+      objectKey,
+      byteSize: params.size,
+      mimeType: params.mimeType,
+      state: params.status === "ready" ? "ready" : "pending",
+    });
 
-  await db.insert(blobLocations).values({
-    blobId,
-    storeId: primary.storeId,
-    storagePath,
-    state: params.status === "ready" ? "available" : "pending",
-    origin: "primary_upload",
-  });
+    await tx.insert(blobLocations).values({
+      blobId,
+      storeId: primary.storeId,
+      storagePath,
+      state: params.status === "ready" ? "available" : "pending",
+      origin: "primary_upload",
+    });
 
-  await db.insert(files).values({
-    id: fileId,
-    workspaceId,
-    userId,
-    folderId: params.folderId,
-    blobId,
-    name: params.fileName,
-    mimeType: params.mimeType,
-    size: params.size,
-    storagePath,
-    storageProvider: primary.providerName,
-    status: params.status ?? "uploading",
-    s3Key: params.s3Key ?? null,
+    await tx.insert(files).values({
+      id: fileId,
+      workspaceId,
+      userId,
+      folderId: params.folderId,
+      blobId,
+      name: params.fileName,
+      mimeType: params.mimeType,
+      size: params.size,
+      storagePath,
+      storageProvider: primary.providerName,
+      status: params.status ?? "uploading",
+      s3Key: params.s3Key ?? null,
+    });
   });
 
   return {
