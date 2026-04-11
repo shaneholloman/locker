@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@locker/database/client";
-import { files, uploadLinks, workspaces } from "@locker/database";
-import {
-  createStorageForWorkspace,
-  shouldEnforceQuota,
-} from "../../../../server/storage";
+import { uploadLinks, workspaces } from "@locker/database";
+import { shouldEnforceQuota } from "../../../../server/storage";
 import { eq, sql } from "drizzle-orm";
-import { randomUUID } from "crypto";
 import { verifyLinkPassword } from "@/server/security/password";
+import {
+  createPendingFileUpload,
+  markFileUploadReady,
+} from "../../../../server/stores/file-records";
+import { runFileReadyHooks } from "../../../../server/stores/lifecycle";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
@@ -86,33 +87,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const { storage, configId, providerName } = await createStorageForWorkspace(
-    link.workspaceId,
-  );
-  const fileId = randomUUID();
-  const storagePath = `${link.workspaceId}/${fileId}/${file.name}`;
+  const pending = await createPendingFileUpload({
+    db,
+    workspaceId: link.workspaceId,
+    userId: link.userId,
+    folderId: link.folderId ?? null,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    status: "uploading",
+  });
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  await storage.upload({
-    path: storagePath,
+  await pending.storage.upload({
+    path: pending.storagePath,
     data: buffer,
     contentType: file.type || "application/octet-stream",
   });
 
-  await db.insert(files).values({
-    id: fileId,
-    workspaceId: link.workspaceId,
-    userId: link.userId,
-    folderId: link.folderId ?? null,
-    name: file.name,
-    mimeType: file.type || "application/octet-stream",
-    size: file.size,
-    storagePath,
-    storageProvider: providerName,
-    storageConfigId: configId,
-    status: "ready",
-  });
+  await markFileUploadReady({ db, fileId: pending.fileId });
 
   // Update counts
   await db
@@ -124,6 +118,13 @@ export async function POST(req: NextRequest) {
     .update(workspaces)
     .set({ storageUsed: sql`${workspaces.storageUsed} + ${file.size}` })
     .where(eq(workspaces.id, link.workspaceId));
+
+  void runFileReadyHooks({
+    db,
+    workspaceId: link.workspaceId,
+    userId: link.userId,
+    fileId: pending.fileId,
+  }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

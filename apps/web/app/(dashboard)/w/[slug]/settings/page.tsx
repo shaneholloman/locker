@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Settings,
@@ -143,8 +144,28 @@ export default function WorkspaceSettingsPage() {
           </div>
         )}
 
-        {/* Custom Storage (BYOB) */}
-        {isAdmin && <BringYourOwnBucket />}
+        {isAdmin && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Stores</h2>
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Manage workspace stores</p>
+                  <p className="text-xs text-muted-foreground">
+                    Configure primary storage, add replicas, and run sync or
+                    ingest jobs from one place.
+                  </p>
+                </div>
+                <Button asChild size="sm">
+                  <Link href={`/w/${workspace.slug}/settings/stores`}>
+                    <HardDrive className="mr-1 size-4" />
+                    Open Stores
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Danger zone */}
         {isOwner && (
@@ -184,12 +205,12 @@ export default function WorkspaceSettingsPage() {
 
 // ── Bring Your Own Bucket ─────────────────────────────────────────────
 
-type Provider = "s3" | "r2" | "vercel";
+type Provider = "s3" | "r2" | "vercel_blob";
 
 const PROVIDER_LABELS: Record<Provider, string> = {
   s3: "Amazon S3",
   r2: "Cloudflare R2",
-  vercel: "Vercel Blob",
+  vercel_blob: "Vercel Blob",
 };
 
 function BringYourOwnBucket() {
@@ -280,15 +301,15 @@ function BringYourOwnBucket() {
           accessKeyId: r2AccessKeyId,
           secretAccessKey: r2SecretAccessKey,
         };
-      case "vercel":
-        return { provider: "vercel" as const, readWriteToken: vercelToken };
+      case "vercel_blob":
+        return { provider: "vercel_blob" as const, readWriteToken: vercelToken };
     }
   }
 
   function buildPayload() {
     return {
       provider,
-      bucket: provider === "vercel" ? "vercel-blob" : bucket,
+      bucket: provider === "vercel_blob" ? "vercel-blob" : bucket,
       region: region || undefined,
       endpoint: endpoint || undefined,
       credentials: buildCredentials(),
@@ -296,13 +317,13 @@ function BringYourOwnBucket() {
   }
 
   function hasRequiredFields() {
-    if (provider !== "vercel" && !bucket) return false;
+    if (provider !== "vercel_blob" && !bucket) return false;
     switch (provider) {
       case "s3":
         return !!accessKeyId && !!secretAccessKey;
       case "r2":
         return !!r2AccountId && !!r2AccessKeyId && !!r2SecretAccessKey;
-      case "vercel":
+      case "vercel_blob":
         return !!vercelToken;
     }
   }
@@ -349,12 +370,12 @@ function BringYourOwnBucket() {
             <SelectContent>
               <SelectItem value="s3">Amazon S3</SelectItem>
               <SelectItem value="r2">Cloudflare R2</SelectItem>
-              <SelectItem value="vercel">Vercel Blob</SelectItem>
+              <SelectItem value="vercel_blob">Vercel Blob</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        {provider !== "vercel" && (
+        {provider !== "vercel_blob" && (
           <div className="space-y-2">
             <label className="text-sm font-medium">Bucket name</label>
             <Input
@@ -522,7 +543,7 @@ function BringYourOwnBucket() {
           </>
         )}
 
-        {provider === "vercel" && (
+        {provider === "vercel_blob" && (
           <>
             <Separator />
             <div className="space-y-3">

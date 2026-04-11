@@ -37,19 +37,23 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return new Response("Access denied", { status: 403 });
   }
 
-  // Look up file record to determine which storage config it uses
+  // Look up the file row so storage resolution can choose a readable location.
   const db = getDb();
   const [fileRecord] = await db
-    .select({ storageConfigId: files.storageConfigId })
+    .select({ id: files.id })
     .from(files)
     .where(eq(files.storagePath, objectPath))
     .limit(1);
 
-  const storage = await createStorageForFile(
-    fileRecord?.storageConfigId ?? null,
-  );
+  const storage = fileRecord
+    ? await createStorageForFile(fileRecord.id)
+    : null;
 
   try {
+    if (!storage) {
+      return new Response("File not found", { status: 404 });
+    }
+
     const file = await storage.download(objectPath);
     return new Response(file.data, {
       status: 200,

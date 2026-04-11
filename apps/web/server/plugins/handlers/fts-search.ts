@@ -42,9 +42,7 @@ export const ftsSearchHandler: PluginHandler = {
       try {
         const [file] = await ctx.db
           .select({
-            storagePath: files.storagePath,
             mimeType: files.mimeType,
-            storageConfigId: files.storageConfigId,
           })
           .from(files)
           .where(
@@ -56,8 +54,11 @@ export const ftsSearchHandler: PluginHandler = {
           .limit(1);
 
         if (file && ftsClient.shouldIndex(file.mimeType)) {
-          const storage = await createStorageForFile(file.storageConfigId);
-          const { data } = await storage.download(file.storagePath);
+          const storage = await createStorageForFile(target.id);
+          const { getFileStoragePath } = await import("../../storage");
+          const { data } = await storage.download(
+            await getFileStoragePath(target.id),
+          );
           const content = await streamToString(data);
 
           await ftsClient.indexFile(
