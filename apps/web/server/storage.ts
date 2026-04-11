@@ -361,28 +361,18 @@ export async function createDefaultStoreForWorkspace(params: {
   });
 }
 
-export async function saveStoreSecret(storeId: string, credentials: unknown) {
-  const db = getDb();
+export async function saveStoreSecret(
+  storeId: string,
+  credentials: unknown,
+  txDb?: ReturnType<typeof getDb>,
+) {
+  const db = txDb ?? getDb();
   const encryptedCredentials = encryptSecret(JSON.stringify(credentials));
-  const [existing] = await db
-    .select({ storeId: storeSecrets.storeId })
-    .from(storeSecrets)
-    .where(eq(storeSecrets.storeId, storeId))
-    .limit(1);
-
-  if (existing) {
-    await db
-      .update(storeSecrets)
-      .set({
-        encryptedCredentials,
-        updatedAt: new Date(),
-      })
-      .where(eq(storeSecrets.storeId, storeId));
-    return;
-  }
-
-  await db.insert(storeSecrets).values({
-    storeId,
-    encryptedCredentials,
-  });
+  await db
+    .insert(storeSecrets)
+    .values({ storeId, encryptedCredentials })
+    .onConflictDoUpdate({
+      target: storeSecrets.storeId,
+      set: { encryptedCredentials, updatedAt: new Date() },
+    });
 }

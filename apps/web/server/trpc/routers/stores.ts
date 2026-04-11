@@ -278,34 +278,36 @@ export const storesRouter = createRouter({
         });
       }
 
-      const [store] = await ctx.db
-        .insert(stores)
-        .values({
-          workspaceId: ctx.workspaceId,
-          name: input.name,
-          provider: input.provider,
-          credentialSource: "store",
-          status: "active",
-          writeMode: input.writeMode,
-          ingestMode: input.ingestMode,
-          readPriority: input.readPriority,
-          config: buildStoreConfig(input),
-          lastTestedAt: new Date(),
-        })
-        .returning({ id: stores.id });
+      return ctx.db.transaction(async (tx) => {
+        const [store] = await tx
+          .insert(stores)
+          .values({
+            workspaceId: ctx.workspaceId,
+            name: input.name,
+            provider: input.provider,
+            credentialSource: "store",
+            status: "active",
+            writeMode: input.writeMode,
+            ingestMode: input.ingestMode,
+            readPriority: input.readPriority,
+            config: buildStoreConfig(input),
+            lastTestedAt: new Date(),
+          })
+          .returning({ id: stores.id });
 
-      if (input.credentials) {
-        await saveStoreSecret(store!.id, input.credentials);
-      }
+        if (input.credentials) {
+          await saveStoreSecret(store!.id, input.credentials, tx);
+        }
 
-      if (!existingSettings) {
-        await ctx.db.insert(workspaceStorageSettings).values({
-          workspaceId: ctx.workspaceId,
-          primaryStoreId: store!.id,
-        });
-      }
+        if (!existingSettings) {
+          await tx.insert(workspaceStorageSettings).values({
+            workspaceId: ctx.workspaceId,
+            primaryStoreId: store!.id,
+          });
+        }
 
-      return { id: store!.id };
+        return { id: store!.id };
+      });
     }),
 
   update: workspaceAdminProcedure
