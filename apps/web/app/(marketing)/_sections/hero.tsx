@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { FolderSvg } from "../_components/folder-svg";
 import Link from "next/link";
 import { GITHUB_URL } from "@/constants/app";
+import { useSession } from "@/lib/auth/client";
 import {
   ArrowRightIcon,
   FolderIcon,
@@ -367,6 +368,8 @@ function FloatingElements() {
 /* ------------------------------------------------------------------ */
 
 export function Hero() {
+  const { data: session } = useSession();
+
   return (
     <section className="relative flex flex-col overflow-hidden bg-mkt-dark">
       {/* Background grid */}
@@ -438,9 +441,9 @@ export function Hero() {
 
             {/* CTAs */}
             <div className="flex flex-wrap items-center gap-3">
-              <Link href="/register">
+              <Link href={session ? "/home" : "/register"}>
                 <Button size="lg" className="rounded-lg">
-                  Get Started
+                  {session ? "View Dashboard" : "Get Started"}
                   <ArrowRightIcon className="ml-1 size-4" />
                 </Button>
               </Link>
