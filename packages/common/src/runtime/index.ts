@@ -19,6 +19,8 @@ export interface RuntimeCapabilities {
   localFilesystemAvailable: boolean;
   longRunningSupported: boolean;
   overridden: boolean;
+  /** Set when LOCKER_RUNTIME_ENV was provided but not a valid value. */
+  overrideRejected: string | null;
   platformStorageProvider: PlatformStorageProviderId | null;
   configuredPlatformStorageProvider: PlatformStorageProviderId | null;
 }
@@ -42,22 +44,33 @@ const VALID_OVERRIDES: ReadonlySet<string> = new Set([
 
 function detectEnvironment(
   env: Record<string, string | undefined>,
-): { environment: RuntimeEnvironment; overridden: boolean } {
+): { environment: RuntimeEnvironment; overridden: boolean; overrideRejected: string | null } {
   const override = env.LOCKER_RUNTIME_ENV;
-  if (override && VALID_OVERRIDES.has(override)) {
-    return { environment: override as RuntimeEnvironment, overridden: true };
+  if (override) {
+    if (VALID_OVERRIDES.has(override)) {
+      return { environment: override as RuntimeEnvironment, overridden: true, overrideRejected: null };
+    }
+    // Invalid override — fall through to auto-detection but record the bad value
+    return detectFromPlatformVars(env, override);
   }
 
-  if (env.VERCEL) return { environment: "vercel", overridden: false };
-  if (env.AWS_LAMBDA_FUNCTION_NAME) return { environment: "aws_lambda", overridden: false };
-  if (env.NETLIFY) return { environment: "netlify", overridden: false };
-  if (env.FLY_REGION) return { environment: "fly", overridden: false };
-  if (env.RAILWAY_ENVIRONMENT) return { environment: "railway", overridden: false };
-  if (env.RENDER) return { environment: "render", overridden: false };
-  if (env.DOCKER_CONTAINER) return { environment: "docker", overridden: false };
-  if (env.NODE_ENV === "development") return { environment: "development", overridden: false };
+  return detectFromPlatformVars(env, null);
+}
 
-  return { environment: "unknown", overridden: false };
+function detectFromPlatformVars(
+  env: Record<string, string | undefined>,
+  overrideRejected: string | null,
+): { environment: RuntimeEnvironment; overridden: boolean; overrideRejected: string | null } {
+  if (env.VERCEL) return { environment: "vercel", overridden: false, overrideRejected };
+  if (env.AWS_LAMBDA_FUNCTION_NAME) return { environment: "aws_lambda", overridden: false, overrideRejected };
+  if (env.NETLIFY) return { environment: "netlify", overridden: false, overrideRejected };
+  if (env.FLY_REGION) return { environment: "fly", overridden: false, overrideRejected };
+  if (env.RAILWAY_ENVIRONMENT) return { environment: "railway", overridden: false, overrideRejected };
+  if (env.RENDER) return { environment: "render", overridden: false, overrideRejected };
+  if (env.DOCKER_CONTAINER) return { environment: "docker", overridden: false, overrideRejected };
+  if (env.NODE_ENV === "development") return { environment: "development", overridden: false, overrideRejected };
+
+  return { environment: "unknown", overridden: false, overrideRejected };
 }
 
 function mapBlobStorageProvider(
@@ -113,7 +126,7 @@ function isProviderConfigured(
 export function detectRuntime(
   env: Record<string, string | undefined>,
 ): RuntimeCapabilities {
-  const { environment, overridden } = detectEnvironment(env);
+  const { environment, overridden, overrideRejected } = detectEnvironment(env);
   const runtimeClass: RuntimeClass = SERVERLESS_ENVIRONMENTS.has(environment)
     ? "serverless"
     : "persistent";
@@ -136,6 +149,7 @@ export function detectRuntime(
     localFilesystemAvailable,
     longRunningSupported,
     overridden,
+    overrideRejected,
     platformStorageProvider,
     configuredPlatformStorageProvider,
   };

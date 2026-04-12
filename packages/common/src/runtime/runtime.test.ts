@@ -61,8 +61,20 @@ describe("detectRuntime", () => {
     });
     expect(result.environment).toBe("docker");
     expect(result.overridden).toBe(true);
+    expect(result.overrideRejected).toBeNull();
     expect(result.runtimeClass).toBe("persistent");
     expect(result.longRunningSupported).toBe(true);
+  });
+
+  it("invalid LOCKER_RUNTIME_ENV falls through to auto-detection with overrideRejected", () => {
+    const result = detectRuntime({
+      VERCEL: "1",
+      LOCKER_RUNTIME_ENV: "dokcer",
+    });
+    expect(result.environment).toBe("vercel");
+    expect(result.overridden).toBe(false);
+    expect(result.overrideRejected).toBe("dokcer");
+    expect(result.runtimeClass).toBe("serverless");
   });
 
   it("unknown production environment defaults to persistent with local storage", () => {

@@ -32,13 +32,6 @@ const providerNameMap = {
   local: "local",
 } as const;
 
-function getPlatformStoreProvider(): StoreRow["provider"] {
-  const provider = runtime.configuredPlatformStorageProvider;
-  if (provider) return provider;
-  // Fallback to intent for error messaging in createDefaultStoreForWorkspace
-  return runtime.platformStorageProvider ?? "local";
-}
-
 function getDefaultStoreName(provider: StoreRow["provider"]): string {
   switch (provider) {
     case "local":
@@ -176,9 +169,23 @@ export async function getPrimaryStore(workspaceId: string): Promise<{
     .limit(1);
 
   if (!settings) {
-    throw new StorageConfigError(
-      "Workspace storage is not initialized. Please contact your workspace administrator.",
-    );
+    // Auto-create for workspaces that predate the explicit init path.
+    // createDefaultStoreForWorkspace will fail-fast if the provider is
+    // misconfigured, so this is safe — it won't silently create a broken store.
+    await createDefaultStoreForWorkspace({ workspaceId });
+    const [retried] = await db
+      .select({ primaryStoreId: workspaceStorageSettings.primaryStoreId })
+      .from(workspaceStorageSettings)
+      .where(eq(workspaceStorageSettings.workspaceId, workspaceId))
+      .limit(1);
+
+    if (!retried) {
+      throw new StorageConfigError(
+        "Workspace storage is not initialized. Please contact your workspace administrator.",
+      );
+    }
+
+    return getStoreById(retried.primaryStoreId);
   }
 
   return getStoreById(settings.primaryStoreId);

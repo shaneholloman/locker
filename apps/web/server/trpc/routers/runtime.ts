@@ -1,6 +1,6 @@
-import { createRouter, publicProcedure } from "../init";
+import { createRouter, protectedProcedure } from "../init";
 import { runtime } from "../../runtime-context";
 
 export const runtimeRouter = createRouter({
-  capabilities: publicProcedure.query(() => runtime),
+  capabilities: protectedProcedure.query(() => runtime),
 });
