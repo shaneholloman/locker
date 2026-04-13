@@ -1,0 +1,24 @@
+{
+  "name": "@locker/workflows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@renderinc/sdk": "^0.5.0",
+    "@locker/jobs": "workspace:*",
+    "@locker/database": "workspace:*",
+    "@locker/storage": "workspace:*",
+    "@locker/common": "workspace:*",
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

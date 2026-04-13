@@ -23,6 +23,7 @@ import { ftsClient } from "../plugins/handlers/fts-client";
 import { invalidateWorkspaceVfsSnapshot } from "../vfs/locker-vfs";
 import { isTextIndexable, transcribeFile } from "../plugins/transcription";
 import { syncFileToStores } from "./sync";
+import { makeWebFileSourceResolver } from "../storage";
 
 export async function runFileReadyHooks(params: {
   db: Database;
@@ -122,7 +123,7 @@ export async function runFileReadyHooks(params: {
   }
 
   if (writableReplicaExists) {
-    void syncFileToStores({ db: params.db, fileId: file.id }).catch(() => {});
+    void syncFileToStores({ db: params.db, fileId: file.id, resolveFileSource: makeWebFileSourceResolver() }).catch(() => {});
   }
 }
 

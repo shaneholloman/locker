@@ -7,15 +7,32 @@ import {
   storeSecrets,
   workspaceStorageSettings,
 } from "@locker/database";
+import type { StorageProvider } from "@locker/storage";
+import { encryptSecret } from "./s3/auth";
+import { runtime } from "./runtime-context";
 import {
-  createStorage,
-  createStorageFromConfig,
-  type StorageProvider,
-  type WorkspaceStorageConfig,
-} from "@locker/storage";
-import { decryptSecret, encryptSecret } from "./s3/auth";
+  hydrateStore,
+  getActiveStores as _getActiveStores,
+  getStoreById as _getStoreById,
+  buildStoragePathForStore as _buildStoragePathForStore,
+  type StoreRow,
+  type WorkspaceStorageResult as _WorkspaceStorageResult,
+} from "@locker/jobs";
+import type { FileSourceResolver } from "@locker/jobs";
 
-type StoreRow = typeof stores.$inferSelect;
+// Re-export shared helpers so existing imports from this file continue to work
+export const getActiveStores = _getActiveStores;
+export const getStoreById = _getStoreById;
+export const buildStoragePathForStore = _buildStoragePathForStore;
+export type { StoreRow };
+export type WorkspaceStorageResult = _WorkspaceStorageResult;
+
+export class StorageConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageConfigError";
+  }
+}
 
 const providerNameMap = {
   s3: "s3",
@@ -23,20 +40,6 @@ const providerNameMap = {
   vercel_blob: "vercel",
   local: "local",
 } as const;
-
-function getPlatformStoreProvider(): StoreRow["provider"] {
-  switch (process.env.BLOB_STORAGE_PROVIDER) {
-    case "s3":
-      return "s3";
-    case "r2":
-      return "r2";
-    case "vercel":
-      return "vercel_blob";
-    case "local":
-    default:
-      return "local";
-  }
-}
 
 function getDefaultStoreName(provider: StoreRow["provider"]): string {
   switch (provider) {
@@ -53,138 +56,35 @@ function getDefaultStoreName(provider: StoreRow["provider"]): string {
   }
 }
 
-function asConfigObject(
-  value: Record<string, unknown> | null,
-): Record<string, unknown> {
-  return value ?? {};
-}
-
-function getConfigString(
-  config: Record<string, unknown>,
-  key: string,
-): string | null {
-  const value = config[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function buildStorageConfig(
-  store: StoreRow,
-  encryptedCredentials?: string | null,
-): WorkspaceStorageConfig {
-  const config = asConfigObject(store.config as Record<string, unknown> | null);
-  const decryptedCredentials = encryptedCredentials
-    ? JSON.parse(decryptSecret(encryptedCredentials))
-    : undefined;
-
-  return {
-    provider: store.provider,
-    bucket: getConfigString(config, "bucket"),
-    region: getConfigString(config, "region"),
-    endpoint: getConfigString(config, "endpoint"),
-    accountId: getConfigString(config, "accountId"),
-    publicUrl: getConfigString(config, "publicUrl"),
-    baseDir: getConfigString(config, "baseDir"),
-    credentials: decryptedCredentials,
-  };
-}
-
-function normalizeObjectKey(value: string): string {
-  return value.replace(/^\/+|\/+$/g, "");
-}
-
-function joinStoragePath(prefix: string | null, objectKey: string): string {
-  const normalizedPrefix = prefix?.replace(/^\/+|\/+$/g, "") ?? "";
-  const normalizedObjectKey = normalizeObjectKey(objectKey);
-  return normalizedPrefix
-    ? `${normalizedPrefix}/${normalizedObjectKey}`
-    : normalizedObjectKey;
-}
-
-export function buildStoragePathForStore(
-  store: Pick<StoreRow, "config">,
-  objectKey: string,
-): string {
-  const config = asConfigObject(store.config as Record<string, unknown> | null);
-  return joinStoragePath(getConfigString(config, "rootPrefix"), objectKey);
-}
-
-async function hydrateStore(
-  store: StoreRow,
-): Promise<{ store: StoreRow; storage: StorageProvider }> {
-  const db = getDb();
-  const [secretRow] = await db
-    .select({ encryptedCredentials: storeSecrets.encryptedCredentials })
-    .from(storeSecrets)
-    .where(eq(storeSecrets.storeId, store.id))
-    .limit(1);
-
-  return {
-    store,
-    storage:
-      store.credentialSource === "platform"
-        ? createStorageFromConfig(buildStorageConfig(store))
-        : createStorageFromConfig(
-            buildStorageConfig(store, secretRow?.encryptedCredentials ?? null),
-          ),
-  };
-}
-
-export interface WorkspaceStorageResult {
-  storage: StorageProvider;
-  store: StoreRow;
-  storeId: string;
-  providerName: string;
-}
-
-export async function getActiveStores(workspaceId: string): Promise<StoreRow[]> {
-  const db = getDb();
-  return db
-    .select()
-    .from(stores)
-    .where(and(eq(stores.workspaceId, workspaceId), eq(stores.status, "active")))
-    .orderBy(asc(stores.readPriority), asc(stores.createdAt));
-}
-
-export async function getStoreById(storeId: string): Promise<{
-  store: StoreRow;
-  storage: StorageProvider;
-}> {
-  const db = getDb();
-  const [store] = await db
-    .select()
-    .from(stores)
-    .where(eq(stores.id, storeId))
-    .limit(1);
-
-  if (!store) {
-    throw new Error("Store not found");
-  }
-
-  return hydrateStore(store);
-}
-
 export async function getPrimaryStore(workspaceId: string): Promise<{
   store: StoreRow;
   storage: StorageProvider;
 }> {
   const db = getDb();
-  let [settings] = await db
+  const [settings] = await db
     .select({ primaryStoreId: workspaceStorageSettings.primaryStoreId })
     .from(workspaceStorageSettings)
     .where(eq(workspaceStorageSettings.workspaceId, workspaceId))
     .limit(1);
 
   if (!settings) {
+    // Auto-create for workspaces that predate the explicit init path.
+    // createDefaultStoreForWorkspace will fail-fast if the provider is
+    // misconfigured, so this is safe — it won't silently create a broken store.
     await createDefaultStoreForWorkspace({ workspaceId });
-    [settings] = await db
+    const [retried] = await db
       .select({ primaryStoreId: workspaceStorageSettings.primaryStoreId })
       .from(workspaceStorageSettings)
       .where(eq(workspaceStorageSettings.workspaceId, workspaceId))
       .limit(1);
-  }
 
-  if (!settings) {
-    throw new Error("Workspace storage settings not found");
+    if (!retried) {
+      throw new StorageConfigError(
+        "Workspace storage is not initialized. Please contact your workspace administrator.",
+      );
+    }
+
+    return getStoreById(retried.primaryStoreId);
   }
 
   return getStoreById(settings.primaryStoreId);
@@ -198,7 +98,7 @@ export async function createStorageForWorkspace(
     storage,
     store,
     storeId: store.id,
-    providerName: providerNameMap[store.provider],
+    providerName: providerNameMap[store.provider as keyof typeof providerNameMap],
   };
 }
 
@@ -313,19 +213,35 @@ export async function getFileStoreId(
 
 export async function shouldEnforceQuota(workspaceId: string): Promise<boolean> {
   const { store } = await getPrimaryStore(workspaceId);
-  return store.credentialSource === "platform" && store.provider !== "local";
+  if (store.credentialSource !== "platform") return false;
+  if (!runtime.longRunningSupported) return true;
+  return store.provider !== "local";
 }
 
 export async function shouldEnforceQuotaForFile(fileId: string): Promise<boolean> {
   const { store } = await getFileLocationContext(fileId);
-  return store.credentialSource === "platform" && store.provider !== "local";
+  if (store.credentialSource !== "platform") return false;
+  if (!runtime.longRunningSupported) return true;
+  return store.provider !== "local";
 }
 
 export async function createDefaultStoreForWorkspace(params: {
   workspaceId: string;
 }): Promise<{ storeId: string }> {
+  const configured = runtime.configuredPlatformStorageProvider;
+  if (!configured) {
+    if (runtime.platformStorageProvider) {
+      throw new StorageConfigError(
+        `Storage provider "${runtime.platformStorageProvider}" is selected but not configured. Provide the required credentials for your chosen provider.`,
+      );
+    }
+    throw new StorageConfigError(
+      "No storage provider is configured. Set BLOB_STORAGE_PROVIDER and provide the required credentials.",
+    );
+  }
+
+  const provider = configured;
   const db = getDb();
-  const provider = getPlatformStoreProvider();
   const baseConfig: Record<string, unknown> = {};
 
   if (provider === "s3") {
@@ -364,6 +280,17 @@ export async function createDefaultStoreForWorkspace(params: {
 
     return { storeId: store!.id };
   });
+}
+
+export function makeWebFileSourceResolver(): FileSourceResolver {
+  return async (fileId, preferredStoreId) => {
+    const ctx = await getFileLocationContext(fileId, preferredStoreId);
+    return {
+      storage: ctx.storage,
+      storagePath: ctx.storagePath,
+      storeId: ctx.store.id,
+    };
+  };
 }
 
 export async function saveStoreSecret(

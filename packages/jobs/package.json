@@ -1,5 +1,5 @@
 {
-  "name": "@locker/common",
+  "name": "@locker/jobs",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,14 +7,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "@locker/database": "workspace:*",
+    "@locker/storage": "workspace:*",
+    "@locker/common": "workspace:*",
+    "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.4"
+    "typescript": "^5.9.3"
   }
 }
