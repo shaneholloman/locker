@@ -51,7 +51,10 @@ export const resolveFileSource: FileSourceResolver = async (
     (l) =>
       l.storagePath === file.storagePath && l.state !== "failed",
   );
-  const chosen = preferred ?? available ?? locations[0]!;
+  const anyAvailable = locations.find(
+    (l) => l.state === "available" || l.state === "pending",
+  );
+  const chosen = preferred ?? available ?? anyAvailable ?? locations[0]!;
 
   const { storage } = await hydrateStore(chosen.store);
 
