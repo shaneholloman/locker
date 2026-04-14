@@ -68,14 +68,12 @@ export interface WorkspaceStorageConfig {
 export function createStorageFromConfig(
   config: WorkspaceStorageConfig,
 ): StorageProvider {
-  const creds = config.credentials;
+  const creds = config.credentials as Record<string, unknown> | null | undefined;
   switch (config.provider) {
     case "s3":
       return new S3StorageAdapter({
-        accessKeyId:
-          creds && creds.provider === "s3" ? creds.accessKeyId : undefined,
-        secretAccessKey:
-          creds && creds.provider === "s3" ? creds.secretAccessKey : undefined,
+        accessKeyId: (creds?.accessKeyId as string) ?? undefined,
+        secretAccessKey: (creds?.secretAccessKey as string) ?? undefined,
         bucket: config.bucket ?? undefined,
         region: config.region ?? undefined,
         endpoint: config.endpoint ?? undefined,
@@ -83,21 +81,15 @@ export function createStorageFromConfig(
     case "r2":
       return new R2StorageAdapter({
         accountId:
-          config.accountId ??
-          (creds && creds.provider === "r2" ? creds.accountId : undefined),
-        accessKeyId:
-          creds && creds.provider === "r2" ? creds.accessKeyId : undefined,
-        secretAccessKey:
-          creds && creds.provider === "r2" ? creds.secretAccessKey : undefined,
+          config.accountId ?? (creds?.accountId as string) ?? undefined,
+        accessKeyId: (creds?.accessKeyId as string) ?? undefined,
+        secretAccessKey: (creds?.secretAccessKey as string) ?? undefined,
         bucket: config.bucket ?? undefined,
         publicUrl: config.publicUrl ?? undefined,
       });
     case "vercel_blob":
       return new VercelBlobAdapter({
-        token:
-          creds && creds.provider === "vercel_blob"
-            ? creds.readWriteToken
-            : undefined,
+        token: (creds?.readWriteToken as string) ?? undefined,
       });
     case "local":
       return new LocalStorageAdapter({

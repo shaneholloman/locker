@@ -15,6 +15,7 @@ import {
   getActiveStores as _getActiveStores,
   getStoreById as _getStoreById,
   buildStoragePathForStore as _buildStoragePathForStore,
+  buildStoreTargetPath as _buildStoreTargetPath,
   type StoreRow,
   type WorkspaceStorageResult as _WorkspaceStorageResult,
 } from "@locker/jobs";
@@ -24,6 +25,7 @@ import type { FileSourceResolver } from "@locker/jobs";
 export const getActiveStores = _getActiveStores;
 export const getStoreById = _getStoreById;
 export const buildStoragePathForStore = _buildStoragePathForStore;
+export const buildStoreTargetPath = _buildStoreTargetPath;
 export type { StoreRow };
 export type WorkspaceStorageResult = _WorkspaceStorageResult;
 
