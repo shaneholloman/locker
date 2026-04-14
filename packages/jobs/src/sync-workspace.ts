@@ -10,7 +10,8 @@ import {
 import type { Database } from "@locker/database";
 import { getDb } from "@locker/database/client";
 import type { StorageProvider } from "@locker/storage";
-import { buildStoragePathForStore, getActiveStores, getStoreById } from "./store-utils";
+import { buildStoragePathForStore, getActiveStores, getStoreById, type StoreRow } from "./store-utils";
+import { buildFolderPath, buildStoreTargetPath, isLegacyObjectKey } from "./path-builder";
 
 export type FileSourceResolver = (
   fileId: string,
@@ -83,6 +84,33 @@ async function upsertRunItem(params: {
     });
 }
 
+async function computeTargetPath(
+  db: Database,
+  targetStore: Pick<StoreRow, "config" | "credentialSource">,
+  file: {
+    workspaceId: string;
+    objectKey: string;
+    name: string;
+    folderId: string | null;
+  },
+): Promise<string> {
+  if (isLegacyObjectKey(file.objectKey)) {
+    if (targetStore.credentialSource === "platform") {
+      // Legacy file on the platform store — keep existing path
+      return buildStoragePathForStore(targetStore, file.objectKey);
+    }
+    // Legacy file → user store: compute human-readable path from metadata
+    const displayPath = await buildFolderPath(db, file.workspaceId, {
+      name: file.name,
+      folderId: file.folderId,
+    });
+    return buildStoreTargetPath(targetStore, file.workspaceId, displayPath);
+  }
+
+  // New-format objectKey is already a display path
+  return buildStoreTargetPath(targetStore, file.workspaceId, file.objectKey);
+}
+
 export async function syncFileToStores(params: {
   fileId: string;
   resolveFileSource: FileSourceResolver;
@@ -92,6 +120,7 @@ export async function syncFileToStores(params: {
   db?: Database;
 }): Promise<{ synced: number; failed: number; skipped: number }> {
   const db = getDatabase(params.db);
+  const tag = `[sync:file:${params.fileId.slice(0, 8)}]`;
 
   const [file] = await db
     .select({
@@ -99,6 +128,8 @@ export async function syncFileToStores(params: {
       workspaceId: files.workspaceId,
       blobId: files.blobId,
       status: files.status,
+      name: files.name,
+      folderId: files.folderId,
       objectKey: fileBlobs.objectKey,
     })
     .from(files)
@@ -106,7 +137,12 @@ export async function syncFileToStores(params: {
     .where(eq(files.id, params.fileId))
     .limit(1);
 
-  if (!file || file.status !== "ready") {
+  if (!file) {
+    console.warn(`${tag} File not found, skipping`);
+    return { synced: 0, failed: 0, skipped: 0 };
+  }
+  if (file.status !== "ready") {
+    console.warn(`${tag} File status is "${file.status}", skipping`);
     return { synced: 0, failed: 0, skipped: 0 };
   }
 
@@ -119,6 +155,9 @@ export async function syncFileToStores(params: {
   );
 
   if (writableTargets.length === 0) {
+    console.warn(
+      `${tag} No writable targets (${workspaceStores.length} stores total, sourceStoreId=${params.sourceStoreId ?? "none"}, targetStoreId=${params.targetStoreId ?? "any"})`,
+    );
     return { synced: 0, failed: 0, skipped: 0 };
   }
 
@@ -132,9 +171,53 @@ export async function syncFileToStores(params: {
     .from(blobLocations)
     .where(eq(blobLocations.blobId, file.blobId));
 
-  const source = await params.resolveFileSource(
-    file.id,
-    params.sourceStoreId,
+  let source: Awaited<ReturnType<FileSourceResolver>>;
+  try {
+    source = await params.resolveFileSource(
+      file.id,
+      params.sourceStoreId,
+    );
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(
+      `${tag} Failed to resolve file source (objectKey=${file.objectKey}): ${msg}`,
+    );
+    // Record failure for every target so the run counts are accurate
+    for (const targetStore of writableTargets) {
+      const targetPath = await computeTargetPath(db, targetStore, file);
+      await upsertRunItem({
+        db,
+        runId: params.runId,
+        blobId: file.blobId,
+        sourceStoreId: null,
+        targetStoreId: targetStore.id,
+        status: "failed",
+        errorMessage: `Source resolution failed: ${msg}`,
+      });
+      await db
+        .insert(blobLocations)
+        .values({
+          blobId: file.blobId,
+          storeId: targetStore.id,
+          storagePath: targetPath,
+          state: "failed",
+          origin: "replicated",
+          lastError: `Source resolution failed: ${msg}`,
+        })
+        .onConflictDoUpdate({
+          target: [blobLocations.blobId, blobLocations.storeId],
+          set: {
+            state: "failed",
+            lastError: `Source resolution failed: ${msg}`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    return { synced: 0, failed: writableTargets.length, skipped: 0 };
+  }
+
+  console.log(
+    `${tag} Syncing objectKey="${file.objectKey}" from store ${source.storeId.slice(0, 8)} → ${writableTargets.length} target(s)`,
   );
 
   let synced = 0;
@@ -146,7 +229,7 @@ export async function syncFileToStores(params: {
     const existing = locations.find(
       (location) => location.storeId === targetStore.id,
     );
-    const targetPath = buildStoragePathForStore(targetStore, file.objectKey);
+    const targetPath = await computeTargetPath(db, targetStore, file);
 
     if (
       existing &&
@@ -176,8 +259,14 @@ export async function syncFileToStores(params: {
 
     try {
       const { storage: targetStorage } = await getStoreById(targetStore.id);
+      console.log(
+        `${tag} Downloading from source path="${source.storagePath}"`,
+      );
       const { data, contentType } = await source.storage.download(
         source.storagePath,
+      );
+      console.log(
+        `${tag} Uploading to ${targetStore.provider} store ${targetStore.id.slice(0, 8)} path="${targetPath}"`,
       );
       await targetStorage.upload({
         path: targetPath,
@@ -208,6 +297,7 @@ export async function syncFileToStores(params: {
 
       touchedStoreIds.add(targetStore.id);
       synced += 1;
+      console.log(`${tag} ✓ Synced to store ${targetStore.id.slice(0, 8)}`);
       await upsertRunItem({
         db,
         runId: params.runId,
@@ -218,6 +308,15 @@ export async function syncFileToStores(params: {
       });
     } catch (error) {
       failed += 1;
+      const msg =
+        error instanceof Error ? error.message : "Sync failed unexpectedly";
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error(
+        `${tag} ✗ Failed to sync to ${targetStore.provider} store ${targetStore.id.slice(0, 8)}: ${msg}`,
+      );
+      if (stack) {
+        console.error(`${tag}   ${stack.split("\n").slice(1, 4).join("\n  ")}`);
+      }
       await db
         .insert(blobLocations)
         .values({
@@ -226,18 +325,14 @@ export async function syncFileToStores(params: {
           storagePath: targetPath,
           state: "failed",
           origin: "replicated",
-          lastError:
-            error instanceof Error ? error.message : "Sync failed unexpectedly",
+          lastError: msg,
         })
         .onConflictDoUpdate({
           target: [blobLocations.blobId, blobLocations.storeId],
           set: {
             storagePath: targetPath,
             state: "failed",
-            lastError:
-              error instanceof Error
-                ? error.message
-                : "Sync failed unexpectedly",
+            lastError: msg,
             updatedAt: new Date(),
           },
         });
@@ -249,8 +344,7 @@ export async function syncFileToStores(params: {
         sourceStoreId: source.storeId,
         targetStoreId: targetStore.id,
         status: "failed",
-        errorMessage:
-          error instanceof Error ? error.message : "Sync failed unexpectedly",
+        errorMessage: msg,
       });
     }
   }
@@ -286,6 +380,7 @@ export async function syncWorkspaceStores(params: {
 }): Promise<{ runId: string }> {
   const db = getDatabase(params.db);
   let runId: string;
+  const wsTag = `[sync:workspace:${params.workspaceId.slice(0, 8)}]`;
 
   const workspaceFiles = await db
     .select({ id: files.id })
@@ -296,6 +391,10 @@ export async function syncWorkspaceStores(params: {
         eq(files.status, "ready"),
       ),
     );
+
+  console.log(
+    `${wsTag} Starting sync: ${workspaceFiles.length} file(s), targetStoreId=${params.targetStoreId ?? "all"}`,
+  );
 
   if (params.runId) {
     await db
@@ -324,11 +423,12 @@ export async function syncWorkspaceStores(params: {
     runId = run!.id;
   }
 
+  console.log(`${wsTag} Run ${runId.slice(0, 8)} created`);
+
   let processed = 0;
   let failed = 0;
 
   try {
-
     await runWithConcurrency(workspaceFiles, 3, async (file) => {
       const result = await syncFileToStores({
         db,
@@ -350,10 +450,15 @@ export async function syncWorkspaceStores(params: {
         .where(eq(replicationRuns.id, runId));
     });
 
+    const finalStatus = failed > 0 ? "failed" : "completed";
+    console.log(
+      `${wsTag} Run ${runId.slice(0, 8)} finished: ${finalStatus} (processed=${processed}, failed=${failed})`,
+    );
+
     await db
       .update(replicationRuns)
       .set({
-        status: failed > 0 ? "failed" : "completed",
+        status: finalStatus,
         processedItems: processed,
         failedItems: failed,
         completedAt: new Date(),
@@ -361,14 +466,24 @@ export async function syncWorkspaceStores(params: {
       })
       .where(eq(replicationRuns.id, runId));
   } catch (error) {
+    const msg =
+      error instanceof Error ? error.message : "Workspace sync failed";
+    console.error(
+      `${wsTag} Run ${runId.slice(0, 8)} crashed after ${processed} files: ${msg}`,
+    );
+    if (error instanceof Error && error.stack) {
+      console.error(
+        `${wsTag}   ${error.stack.split("\n").slice(1, 5).join("\n  ")}`,
+      );
+    }
+
     await db
       .update(replicationRuns)
       .set({
         status: "failed",
         processedItems: processed,
         failedItems: failed + 1,
-        errorMessage:
-          error instanceof Error ? error.message : "Workspace sync failed",
+        errorMessage: msg,
         completedAt: new Date(),
         updatedAt: new Date(),
       })

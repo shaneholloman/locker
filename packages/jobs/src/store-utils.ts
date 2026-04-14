@@ -17,13 +17,13 @@ export interface WorkspaceStorageResult {
   providerName: string;
 }
 
-function asConfigObject(
+export function asConfigObject(
   value: Record<string, unknown> | null,
 ): Record<string, unknown> {
   return value ?? {};
 }
 
-function getConfigString(
+export function getConfigString(
   config: Record<string, unknown>,
   key: string,
 ): string | null {
@@ -56,7 +56,7 @@ function normalizeObjectKey(value: string): string {
   return value.replace(/^\/+|\/+$/g, "");
 }
 
-function joinStoragePath(prefix: string | null, objectKey: string): string {
+export function joinStoragePath(prefix: string | null, objectKey: string): string {
   const normalizedPrefix = prefix?.replace(/^\/+|\/+$/g, "") ?? "";
   const normalizedObjectKey = normalizeObjectKey(objectKey);
   return normalizedPrefix

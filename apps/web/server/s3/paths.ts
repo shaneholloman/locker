@@ -1,6 +1,7 @@
 import { eq, and, isNull } from 'drizzle-orm';
 import { folders } from '@locker/database';
 import type { Database } from '@locker/database/client';
+import { buildFolderPath } from '@locker/jobs';
 
 /**
  * Resolves an S3 key's directory path to a folder ID, creating folders as needed.
@@ -78,26 +79,7 @@ export async function buildS3KeyForFile(
   workspaceId: string,
   file: { name: string; folderId: string | null },
 ): Promise<string> {
-  if (!file.folderId) return file.name;
-
-  const segments: string[] = [];
-  let currentId: string | null = file.folderId;
-
-  while (currentId) {
-    const [folder] = await db
-      .select({ name: folders.name, parentId: folders.parentId })
-      .from(folders)
-      .where(
-        and(eq(folders.id, currentId), eq(folders.workspaceId, workspaceId)),
-      );
-
-    if (!folder) break;
-    segments.unshift(folder.name);
-    currentId = folder.parentId;
-  }
-
-  segments.push(file.name);
-  return segments.join('/');
+  return buildFolderPath(db, workspaceId, file);
 }
 
 /**

@@ -7,9 +7,11 @@ import {
   type Database,
 } from "@locker/database";
 import {
-  buildStoragePathForStore,
-  createStorageForWorkspace,
-} from "../storage";
+  buildFolderPath,
+  buildStoreTargetPath,
+  deduplicateObjectKey,
+} from "@locker/jobs";
+import { createStorageForWorkspace } from "../storage";
 
 export async function createPendingFileUpload(params: {
   db: Database;
@@ -23,13 +25,29 @@ export async function createPendingFileUpload(params: {
   fileId?: string;
   blobId?: string;
   s3Key?: string | null;
+  overwrite?: boolean;
 }) {
   const { db, workspaceId, userId } = params;
   const fileId = params.fileId ?? randomUUID();
   const blobId = params.blobId ?? randomUUID();
-  const objectKey = `${workspaceId}/${blobId}/${params.fileName}`;
+
+  const displayPath = await buildFolderPath(db, workspaceId, {
+    name: params.fileName,
+    folderId: params.folderId,
+  });
+  const objectKey = await deduplicateObjectKey(
+    db,
+    workspaceId,
+    displayPath,
+    params.overwrite ?? false,
+  );
+
   const primary = await createStorageForWorkspace(workspaceId);
-  const storagePath = buildStoragePathForStore(primary.store, objectKey);
+  const storagePath = buildStoreTargetPath(
+    primary.store,
+    workspaceId,
+    objectKey,
+  );
 
   await db.transaction(async (tx) => {
     await tx.insert(fileBlobs).values({

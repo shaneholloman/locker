@@ -15,3 +15,10 @@ export {
   syncFileToStores,
   type FileSourceResolver,
 } from "./sync-workspace";
+
+export {
+  buildFolderPath,
+  buildStoreTargetPath,
+  isLegacyObjectKey,
+  deduplicateObjectKey,
+} from "./path-builder";

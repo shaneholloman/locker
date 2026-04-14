@@ -64,11 +64,10 @@ if (!process.env.S3_API_KEY_ENCRYPTION_SECRET) {
   process.env.S3_API_KEY_ENCRYPTION_SECRET = "test-encryption-secret-for-sync";
 }
 
-const TEST_PREFIX = `sync-test-${Date.now()}`;
-const TMP_DIR = path.join(os.tmpdir(), TEST_PREFIX);
+const TEST_RUN = `sync-test-${Date.now()}`;
+const TMP_DIR = path.join(os.tmpdir(), TEST_RUN);
 const TEST_FILE_CONTENT = "Hello from sync integration test!";
-const TEST_FILE_NAME = "sync-test-file.txt";
-const OBJECT_KEY = `${TEST_PREFIX}/${TEST_FILE_NAME}`;
+const TEST_FILE_NAME = `${TEST_RUN}.txt`; // unique name to avoid collisions
 
 const db = getDb();
 
@@ -102,12 +101,9 @@ function assert(cond: boolean, msg: string) {
 async function setup() {
   log("Setting up test data...");
 
-  // Create temp directory and test file
+  // Create temp directory — the actual file path depends on workspaceId,
+  // which we create below, so we write the file after the workspace insert.
   fs.mkdirSync(TMP_DIR, { recursive: true });
-  const filePath = path.join(TMP_DIR, OBJECT_KEY);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, TEST_FILE_CONTENT);
-  log(`  Created local file at ${filePath}`);
 
   // Create test user
   userId = `sync-test-user-${Date.now()}`;
@@ -181,13 +177,24 @@ async function setup() {
   });
   log(`  Set local store as primary`);
 
+  // objectKey is now the human-readable "display path" (just the filename for root files)
+  const objectKey = TEST_FILE_NAME;
+  // Platform store path includes the workspaceId prefix
+  const platformStoragePath = `${workspaceId}/${objectKey}`;
+
+  // Write the file to disk at the platform store path
+  const filePath = path.join(TMP_DIR, platformStoragePath);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, TEST_FILE_CONTENT);
+  log(`  Created local file at ${filePath}`);
+
   // Create file blob
   const [blob] = await db
     .insert(fileBlobs)
     .values({
       workspaceId,
       createdById: userId,
-      objectKey: OBJECT_KEY,
+      objectKey,
       byteSize: Buffer.byteLength(TEST_FILE_CONTENT),
       mimeType: "text/plain",
       state: "ready",
@@ -206,7 +213,7 @@ async function setup() {
       name: TEST_FILE_NAME,
       mimeType: "text/plain",
       size: Buffer.byteLength(TEST_FILE_CONTENT),
-      storagePath: OBJECT_KEY,
+      storagePath: platformStoragePath,
       storageProvider: "local",
       status: "ready",
     })
@@ -214,11 +221,11 @@ async function setup() {
   fileId = file!.id;
   log(`  Created file ${fileId}`);
 
-  // Create blob location on local store
+  // Create blob location on local store (platform path)
   await db.insert(blobLocations).values({
     blobId,
     storeId: localStoreId,
-    storagePath: OBJECT_KEY,
+    storagePath: platformStoragePath,
     state: "available",
     origin: "primary_upload",
   });
@@ -235,22 +242,26 @@ async function runSync() {
   // Build a file source resolver that reads from the local store
   const localStorage = new LocalStorageAdapter({ baseDir: TMP_DIR });
 
-  const resolveFileSource: FileSourceResolver = async (fId, preferredStoreId) => {
-    const [file] = await db
-      .select({
-        blobId: files.blobId,
-        objectKey: fileBlobs.objectKey,
-      })
-      .from(files)
-      .innerJoin(fileBlobs, eq(files.blobId, fileBlobs.id))
-      .where(eq(files.id, fId))
+  const resolveFileSource: FileSourceResolver = async (fId, _preferredStoreId) => {
+    const [loc] = await db
+      .select({ storagePath: blobLocations.storagePath })
+      .from(blobLocations)
+      .where(
+        and(
+          eq(blobLocations.storeId, localStoreId),
+          eq(
+            blobLocations.blobId,
+            db.select({ blobId: files.blobId }).from(files).where(eq(files.id, fId)).limit(1),
+          ),
+        ),
+      )
       .limit(1);
 
-    if (!file) throw new Error(`File ${fId} not found`);
+    if (!loc) throw new Error(`File ${fId} not found on local store`);
 
     return {
       storage: localStorage,
-      storagePath: file.objectKey,
+      storagePath: loc.storagePath,
       storeId: localStoreId,
     };
   };
@@ -304,7 +315,13 @@ async function verify() {
     `Blob location state is "available" (got "${location!.state}")`,
   );
 
-  // 3. Verify the file actually exists in Vercel Blob
+  // 3. Verify the path on the user store is human-readable (no workspaceId prefix)
+  assert(
+    location!.storagePath === TEST_FILE_NAME,
+    `User store path is just the filename "${TEST_FILE_NAME}" (got "${location!.storagePath}")`,
+  );
+
+  // 4. Verify the file actually exists in Vercel Blob
   const vercelAdapter = new VercelBlobAdapter({ token: VERCEL_BLOB_TOKEN });
   const exists = await vercelAdapter.exists(location!.storagePath);
   assert(exists, `File exists in Vercel Blob at "${location!.storagePath}"`);
