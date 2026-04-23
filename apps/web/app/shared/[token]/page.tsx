@@ -33,12 +33,16 @@ export default function SharedPage({
 
   // Raw-type links are meant to be hit at /shared/[token]/raw — if a user
   // lands on the HTML page by mistake, redirect them to the proxy route.
+  // Forward the entered password so password-protected raw links work.
   const isRawLink = !!data && "access" in data && data.access === "raw";
   useEffect(() => {
     if (isRawLink) {
-      window.location.replace(`/shared/${token}/raw`);
+      const suffix = enteredPassword
+        ? `?p=${encodeURIComponent(enteredPassword)}`
+        : "";
+      window.location.replace(`/shared/${token}/raw${suffix}`);
     }
-  }, [isRawLink, token]);
+  }, [isRawLink, token, enteredPassword]);
 
   const browseQuery = trpc.shares.browseFolder.useQuery(
     {

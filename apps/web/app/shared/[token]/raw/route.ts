@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@locker/database/client";
 import { shareLinks, files } from "@locker/database";
 import {
@@ -37,10 +37,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   if (link.hasPassword) {
+    // Password is accepted via ?p= so raw links stay usable in <img>/<video>
+    // tags. This is a known trade-off: the password appears in URLs, server
+    // logs, and Referer headers for any navigation from the raw URL.
     const provided = req.nextUrl.searchParams.get("p");
     if (!verifyLinkPassword(provided ?? undefined, link.passwordHash)) {
       return new Response("Password required", { status: 401 });
     }
+  }
+
+  if (link.maxDownloads && link.downloadCount >= link.maxDownloads) {
+    return new Response("Download limit reached", { status: 403 });
   }
 
   if (!link.fileId) {
@@ -60,10 +67,24 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const storagePath = await getFileStoragePath(targetFile.id);
   const signedUrl = await storage.getSignedUrl(storagePath, 3600);
 
-  await db
+  // Atomic counter bump — returns no row if another request already hit the cap.
+  const [updated] = await db
     .update(shareLinks)
-    .set({ lastAccessedAt: new Date() })
-    .where(eq(shareLinks.id, link.id));
+    .set({
+      downloadCount: sql`${shareLinks.downloadCount} + 1`,
+      lastAccessedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(shareLinks.id, link.id),
+        sql`${shareLinks.maxDownloads} is null or ${shareLinks.downloadCount} < ${shareLinks.maxDownloads}`,
+      ),
+    )
+    .returning({ id: shareLinks.id });
+
+  if (!updated) {
+    return new Response("Download limit reached", { status: 403 });
+  }
 
   // Local storage returns a relative path like "/api/files/serve/..."; resolve
   // against the request origin so NextResponse.redirect gets an absolute URL.
