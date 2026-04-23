@@ -111,6 +111,11 @@ export const sharesRouter = createRouter({
         throw new Error("Must specify either fileId or folderId");
       }
 
+      // Raw links proxy a single file's bytes — folder shares can't use them.
+      if (input.access === "raw" && !input.fileId) {
+        throw new Error("Raw link type is only available for files");
+      }
+
       // Validate ownership
       if (input.fileId) {
         const [file] = await ctx.db
@@ -158,9 +163,12 @@ export const sharesRouter = createRouter({
         })
         .returning();
 
+      const basePath = `/shared/${token}`;
+      const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${input.access === "raw" ? `${basePath}/raw` : basePath}`;
+
       return {
         ...link,
-        shareUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shared/${token}`,
+        shareUrl,
       };
     }),
 

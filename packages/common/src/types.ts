@@ -2,7 +2,7 @@ export type StorageProvider = 'local' | 's3' | 'r2' | 'vercel';
 
 export type FileStatus = 'uploading' | 'ready' | 'failed';
 
-export type ShareLinkAccess = 'view' | 'download';
+export type ShareLinkAccess = 'download' | 'raw';
 
 export type UploadLinkStatus = 'active' | 'expired' | 'revoked';
 

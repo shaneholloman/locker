@@ -41,7 +41,7 @@ export function createShareTools(ctx: AssistantToolContext) {
   async function createLink(opts: {
     fileId: string | null;
     folderId: string | null;
-    access: "view" | "download";
+    access: "download" | "raw";
     password?: string;
     expiresAt?: string;
     maxDownloads?: number;
@@ -68,7 +68,8 @@ export function createShareTools(ctx: AssistantToolContext) {
       })
       .returning();
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/shared/${token}`;
+    const basePath = `/shared/${token}`;
+    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}${opts.access === "raw" ? `${basePath}/raw` : basePath}`;
     return { shareLink: link, shareUrl };
   }
 
@@ -82,9 +83,11 @@ export function createShareTools(ctx: AssistantToolContext) {
           .uuid()
           .describe("ID of the file to share"),
         access: z
-          .enum(["view", "download"])
-          .default("view")
-          .describe("Access level for the share link"),
+          .enum(["download", "raw"])
+          .default("download")
+          .describe(
+            "Link type. 'download' shows a download page; 'raw' proxies the file bytes directly (embeddable in <img> tags).",
+          ),
         password: z
           .string()
           .min(1)
@@ -135,10 +138,6 @@ export function createShareTools(ctx: AssistantToolContext) {
           .string()
           .uuid()
           .describe("ID of the folder to share"),
-        access: z
-          .enum(["view", "download"])
-          .default("view")
-          .describe("Access level for the share link"),
         password: z
           .string()
           .min(1)
@@ -156,13 +155,7 @@ export function createShareTools(ctx: AssistantToolContext) {
           .optional()
           .describe("Optional maximum number of downloads"),
       }),
-      execute: async ({
-        folderId,
-        access,
-        password,
-        expiresAt,
-        maxDownloads,
-      }) => {
+      execute: async ({ folderId, password, expiresAt, maxDownloads }) => {
         const [folder] = await ctx.db
           .select({ id: folders.id })
           .from(folders)
@@ -179,7 +172,7 @@ export function createShareTools(ctx: AssistantToolContext) {
         return createLink({
           fileId: null,
           folderId,
-          access,
+          access: "download",
           password,
           expiresAt,
           maxDownloads,
@@ -248,7 +241,7 @@ export function createShareTools(ctx: AssistantToolContext) {
             expiresAt: link.expiresAt,
             downloadCount: link.downloadCount,
             maxDownloads: link.maxDownloads,
-            shareUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shared/${link.token}`,
+            shareUrl: `${process.env.NEXT_PUBLIC_APP_URL}/shared/${link.token}${link.access === "raw" ? "/raw" : ""}`,
             createdAt: link.createdAt,
           };
         });

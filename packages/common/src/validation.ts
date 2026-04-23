@@ -56,7 +56,7 @@ export const moveItemSchema = z.object({
 export const createShareLinkSchema = z.object({
   fileId: z.string().uuid().optional(),
   folderId: z.string().uuid().optional(),
-  access: z.enum(["view", "download"]).default("view"),
+  access: z.enum(["download", "raw"]).default("download"),
   password: z.string().min(1).max(255).optional(),
   expiresAt: z.coerce.date().optional(),
   maxDownloads: z.number().int().min(1).optional(),

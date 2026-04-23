@@ -28,8 +28,9 @@ export default function SharedLinksPage() {
     },
   });
 
-  const handleCopy = async (token: string, id: string) => {
-    const url = `${window.location.origin}/shared/${token}`;
+  const handleCopy = async (token: string, id: string, access: string) => {
+    const suffix = access === 'raw' ? '/raw' : '';
+    const url = `${window.location.origin}/shared/${token}${suffix}`;
     await navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -49,7 +50,7 @@ export default function SharedLinksPage() {
           <div className="rounded-lg border bg-card overflow-hidden">
             <div className="grid grid-cols-[1fr_80px_100px_120px_100px] gap-4 px-4 py-2 border-b bg-muted/50">
               <span className="text-xs font-medium text-muted-foreground">Item</span>
-              <span className="text-xs font-medium text-muted-foreground">Access</span>
+              <span className="text-xs font-medium text-muted-foreground">Type</span>
               <span className="text-xs font-medium text-muted-foreground">Downloads</span>
               <span className="text-xs font-medium text-muted-foreground">Created</span>
               <span className="text-xs font-medium text-muted-foreground">Actions</span>
@@ -88,7 +89,7 @@ export default function SharedLinksPage() {
                 Item
               </span>
               <span className="text-xs font-medium text-muted-foreground">
-                Access
+                Type
               </span>
               <span className="text-xs font-medium text-muted-foreground">
                 Downloads
@@ -120,7 +121,7 @@ export default function SharedLinksPage() {
                   )}
                 </div>
                 <span className="text-xs font-mono text-muted-foreground capitalize">
-                  {link.access}
+                  {link.access === 'raw' ? 'Raw file' : 'Download'}
                 </span>
                 <span className="text-xs font-mono text-muted-foreground tabular-nums">
                   {link.downloadCount}
@@ -133,7 +134,7 @@ export default function SharedLinksPage() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    onClick={() => handleCopy(link.token, link.id)}
+                    onClick={() => handleCopy(link.token, link.id, link.access)}
                     disabled={!link.isActive}
                   >
                     {copiedId === link.id ? (

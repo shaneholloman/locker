@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Check, Copy, ExternalLink, Lock, Clock, Download } from "lucide-react";
+import { Check, Copy, ExternalLink, Lock, Clock, Download, FileIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ShareLinkData {
   shareUrl: string;
-  access: "view" | "download";
+  access: "download" | "raw";
   hasPassword?: boolean;
   expiresAt?: string | null;
   maxDownloads?: number | null;
@@ -22,7 +22,10 @@ export function ShareLinkCard({ link }: { link: ShareLinkData }) {
   }, [link.shareUrl]);
 
   const hasDetails =
-    link.hasPassword || link.expiresAt || link.maxDownloads;
+    link.access === "raw" ||
+    link.hasPassword ||
+    link.expiresAt ||
+    link.maxDownloads;
 
   // Format expiration as relative or absolute
   const expiresLabel = link.expiresAt
@@ -79,8 +82,8 @@ export function ShareLinkCard({ link }: { link: ShareLinkData }) {
       {/* Detail chips */}
       {hasDetails && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border/30 px-4 py-2">
-          {link.access === "download" && (
-            <Chip icon={Download} label="Download" />
+          {link.access === "raw" && (
+            <Chip icon={FileIcon} label="Raw file" />
           )}
           {link.hasPassword && <Chip icon={Lock} label="Password" />}
           {expiresLabel && <Chip icon={Clock} label={expiresLabel} />}
