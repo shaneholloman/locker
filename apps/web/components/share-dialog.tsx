@@ -24,10 +24,13 @@ export function ShareDialog({
   onOpenChange: (open: boolean) => void;
   target: { id: string; name: string; type: 'file' | 'folder' };
 }) {
-  const [access, setAccess] = useState<'view' | 'download'>('download');
+  const [access, setAccess] = useState<'download' | 'raw'>('download');
   const [password, setPassword] = useState('');
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const isFolder = target.type === 'folder';
+  const effectiveAccess = isFolder ? 'download' : access;
 
   const createShare = trpc.shares.create.useMutation({
     onSuccess: (data) => {
@@ -44,7 +47,7 @@ export function ShareDialog({
       ...(target.type === 'file'
         ? { fileId: target.id }
         : { folderId: target.id }),
-      access,
+      access: effectiveAccess,
       password: password || undefined,
     });
   };
@@ -93,32 +96,41 @@ export function ShareDialog({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Anyone with this link can {access} this {target.type}
+              {effectiveAccess === 'raw'
+                ? 'This URL serves the raw file — use it directly in <img>, <video>, etc.'
+                : `Anyone with this link can download this ${target.type}`}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                Access level
-              </label>
-              <div className="flex gap-2">
-                <Button
-                  variant={access === 'view' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setAccess('view')}
-                >
-                  View only
-                </Button>
-                <Button
-                  variant={access === 'download' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setAccess('download')}
-                >
-                  Download
-                </Button>
+            {!isFolder && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  Link type
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={access === 'download' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAccess('download')}
+                  >
+                    Download
+                  </Button>
+                  <Button
+                    variant={access === 'raw' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAccess('raw')}
+                  >
+                    Raw file
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  {access === 'raw'
+                    ? 'Proxies the file directly — embeddable in <img> tags.'
+                    : 'Shows a download page with file info.'}
+                </p>
               </div>
-            </div>
+            )}
 
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">

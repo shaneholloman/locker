@@ -29,7 +29,7 @@ export const shareLinks = pgTable(
       onDelete: 'cascade',
     }),
     token: varchar('token', { length: 255 }).unique().notNull(),
-    access: varchar('access', { length: 20 }).notNull().default('view'),
+    access: varchar('access', { length: 20 }).notNull().default('download'),
     hasPassword: boolean('has_password').default(false),
     passwordHash: text('password_hash'),
     expiresAt: timestamp('expires_at'),

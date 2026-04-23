@@ -172,7 +172,7 @@ function extractShareLink(
   const link = (r.shareLink ?? {}) as Record<string, unknown>;
   return {
     shareUrl: r.shareUrl,
-    access: (link.access as "view" | "download") ?? "view",
+    access: (link.access as "download" | "raw") ?? "download",
     hasPassword: (link.hasPassword as boolean) ?? false,
     expiresAt: (link.expiresAt as string) ?? null,
     maxDownloads: (link.maxDownloads as number) ?? null,
