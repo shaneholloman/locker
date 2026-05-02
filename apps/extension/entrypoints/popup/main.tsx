@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 import { sendMessage } from "../../utils/messaging";
 import { webHost } from "../../utils/web-host";
+import { PRIVACY_POLICY_URL } from "../../utils/constants";
 import { FileBrowser } from "../../components/FileBrowser";
 import { Logo } from "../../components/Logo";
 
@@ -47,6 +48,7 @@ function Popup() {
       <div style={styles.container}>
         <Header />
         <div style={styles.body}>Loading…</div>
+        <Footer />
       </div>
     );
   }
@@ -61,6 +63,7 @@ function Popup() {
         <button style={styles.primaryButton} onClick={signIn}>
           Sign in
         </button>
+        <Footer />
       </div>
     );
   }
@@ -72,6 +75,7 @@ function Popup() {
       <button style={styles.secondaryButton} onClick={signOut}>
         Sign out
       </button>
+      <Footer />
     </div>
   );
 }
@@ -81,6 +85,22 @@ function Header() {
     <div style={styles.header}>
       <Logo style={styles.logoMark} aria-hidden="true" />
       <span style={styles.logo}>Locker</span>
+    </div>
+  );
+}
+
+function Footer() {
+  // chrome.tabs is preferable to plain href so the popup can close cleanly
+  // and the link opens in a regular tab rather than a popup-sized window.
+  const openPrivacy = () => {
+    chrome.tabs.create({ url: PRIVACY_POLICY_URL });
+    window.close();
+  };
+  return (
+    <div style={styles.footer}>
+      <button type="button" style={styles.footerLink} onClick={openPrivacy}>
+        Privacy policy
+      </button>
     </div>
   );
 }
@@ -117,6 +137,23 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 13,
     fontWeight: 500,
+  },
+  footer: {
+    display: "flex",
+    justifyContent: "center",
+    paddingTop: 4,
+    borderTop: "1px solid rgba(20, 17, 15, 0.06)",
+    marginTop: 2,
+  },
+  footerLink: {
+    background: "transparent",
+    border: "none",
+    padding: "6px 8px",
+    color: "#79736a",
+    fontSize: 11.5,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    textDecoration: "none",
   },
 };
 

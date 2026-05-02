@@ -7,6 +7,7 @@ declare global {
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const Logo: typeof import('/Users/claudius/openstore/apps/extension/components/Logo').Logo
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
+  const PRIVACY_POLICY_URL: typeof import('/Users/claudius/openstore/apps/extension/utils/constants').PRIVACY_POLICY_URL
   const Select: typeof import('/Users/claudius/openstore/apps/extension/components/Select').Select
   const TrpcError: typeof import('/Users/claudius/openstore/apps/extension/utils/api').TrpcError
   const activeWorkspaceSlugStore: typeof import('/Users/claudius/openstore/apps/extension/utils/storage').activeWorkspaceSlugStore

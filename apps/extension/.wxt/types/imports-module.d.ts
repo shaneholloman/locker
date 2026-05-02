@@ -23,6 +23,7 @@ declare module '#imports' {
   export { Logo } from '../components/Logo';
   export { Select, SelectOption, SelectProps } from '../components/Select';
   export { TrpcError, trpcQuery, trpcMutation, probeSession, downloadAsBlob, blobToBase64 } from '../utils/api';
+  export { PRIVACY_POLICY_URL } from '../utils/constants';
   export { sendMessage, onMessage, Workspace, FolderRow, FileRow, Breadcrumb, ApiResult, GenerationTypeRow } from '../utils/messaging';
   export { signedInStore, activeWorkspaceSlugStore, isSignedIn, setSignedIn, getActiveWorkspaceSlug, setActiveWorkspaceSlug } from '../utils/storage';
   export { webHost } from '../utils/web-host';
