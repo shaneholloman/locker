@@ -185,4 +185,85 @@ export default defineBackground(() => {
       return { ok: false as const, error: e.message, status };
     }
   });
+
+  onMessage("listGenerationTypes", async () => {
+    try {
+      const data = await trpcQuery<
+        Array<{
+          id: string;
+          label: string;
+          description: string;
+          extension: string;
+          mimeType: string;
+          kind: "text" | "image";
+        }>
+      >("assistant.generationTypes", null);
+      return { ok: true as const, data };
+    } catch (err) {
+      const e = err as TrpcError;
+      if (e.status === 401) await setSignedIn(false);
+      return { ok: false as const, error: e.message, status: e.status };
+    }
+  });
+
+  onMessage("generateFile", async ({ data }) => {
+    try {
+      const res = await callGenerateFile(data);
+      return { ok: true as const, data: res };
+    } catch (err) {
+      const e = err as Error & { status?: number };
+      if (e.status === 401) await setSignedIn(false);
+      return { ok: false as const, error: e.message, status: e.status };
+    }
+  });
 });
+
+interface GenerateInput {
+  workspaceSlug: string;
+  typeId: string;
+  prompt: string;
+  attachments?: { name: string; mimeType: string; dataBase64: string }[];
+  lockerFileIds?: string[];
+}
+
+async function callGenerateFile(input: GenerateInput): Promise<{
+  name: string;
+  mimeType: string;
+  size: number;
+  dataBase64: string;
+}> {
+  const env = import.meta.env as unknown as Record<string, string | undefined>;
+  const host = (
+    env.WXT_PUBLIC_LOCKER_WEB_HOST ?? "http://localhost:3000"
+  ).replace(/\/$/, "");
+  const res = await fetch(`${host}/api/ai/generate-file`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "x-workspace-slug": input.workspaceSlug,
+    },
+    body: JSON.stringify({
+      typeId: input.typeId,
+      prompt: input.prompt,
+      attachments: input.attachments,
+      lockerFileIds: input.lockerFileIds,
+    }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    const err: Error & { status?: number } = new Error(
+      body?.error ?? `generate-file ${res.status}`,
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return (await res.json()) as {
+    name: string;
+    mimeType: string;
+    size: number;
+    dataBase64: string;
+  };
+}

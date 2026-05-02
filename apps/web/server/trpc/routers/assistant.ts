@@ -1,13 +1,24 @@
 import { z } from "zod";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import {
-  assistantConversations,
-  assistantMessages,
-} from "@locker/database";
-import { createRouter, workspaceProcedure } from "../init";
+import { assistantConversations, assistantMessages } from "@locker/database";
+import { createRouter, protectedProcedure, workspaceProcedure } from "../init";
+import { GENERATION_TYPES } from "../../ai/generation-types";
 
 export const assistantRouter = createRouter({
+  // Surface the file-generation catalog to clients (the browser extension
+  // uses this to filter generation types against the input's accept attr).
+  generationTypes: protectedProcedure.query(() =>
+    GENERATION_TYPES.map((t) => ({
+      id: t.id,
+      label: t.label,
+      description: t.description,
+      extension: t.extension,
+      mimeType: t.mimeType,
+      kind: t.kind,
+    })),
+  ),
+
   conversations: workspaceProcedure.query(async ({ ctx }) => {
     return ctx.db
       .select({

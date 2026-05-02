@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { StrictMode, useState } from "react";
 import { X } from "lucide-react";
 import { FileBrowser } from "../../components/FileBrowser";
+import { GenerateView } from "../../components/GenerateView";
 import { Logo } from "../../components/Logo";
 import { sendMessage, type FileRow } from "../../utils/messaging";
 import { isSignedIn } from "../../utils/storage";
@@ -120,12 +121,23 @@ export default defineContentScript({
               signedIn={signedIn}
               error={result.error}
               onPickLocker={useLocker}
+              onGenerated={useGenerated}
               accept={accept}
             />,
           );
           return;
         }
         injectFile(input, result.data);
+        close();
+      };
+
+      const useGenerated = (meta: {
+        name: string;
+        mimeType: string;
+        size: number;
+        dataBase64: string;
+      }) => {
+        injectFile(input, meta);
         close();
       };
 
@@ -136,6 +148,7 @@ export default defineContentScript({
             onClose={close}
             signedIn={signedIn}
             onPickLocker={useLocker}
+            onGenerated={useGenerated}
             accept={accept}
           />
         </StrictMode>,
@@ -178,6 +191,12 @@ interface DialogProps {
   onUseComputer: () => void;
   onClose: () => void;
   onPickLocker: (file: FileRow, workspaceSlug: string) => void | Promise<void>;
+  onGenerated: (meta: {
+    name: string;
+    mimeType: string;
+    size: number;
+    dataBase64: string;
+  }) => void;
   error?: string;
   accept?: string[];
 }
@@ -187,10 +206,18 @@ function Dialog({
   onUseComputer,
   onClose,
   onPickLocker,
+  onGenerated,
   error,
   accept,
 }: DialogProps) {
-  const [view, setView] = useState<"choose" | "locker">("choose");
+  const [view, setView] = useState<"choose" | "locker" | "generate">("choose");
+
+  const headerTitle =
+    view === "locker"
+      ? "From Locker"
+      : view === "generate"
+        ? "Generate with AI"
+        : "Choose a file";
 
   return (
     <div style={overlay} onClick={onClose}>
@@ -200,7 +227,7 @@ function Dialog({
             <Logo style={brandLogo} aria-hidden="true" />
             <span style={brandLabel}>Locker</span>
             <span style={brandSep}>·</span>
-            <span style={brandTitle}>Choose a file</span>
+            <span style={brandTitle}>{headerTitle}</span>
           </span>
           <button style={closeBtn} onClick={onClose} aria-label="Close">
             <X size={16} />
@@ -223,14 +250,30 @@ function Dialog({
               <span style={choiceTitle}>From Computer</span>
               <span style={choiceSub}>Open the standard file picker</span>
             </button>
+            <button style={choiceBtn} onClick={() => setView("generate")}>
+              <span style={choiceTitle}>Generate with AI</span>
+              <span style={choiceSub}>
+                Describe what you need and we'll create it
+              </span>
+            </button>
           </div>
+        ) : view === "locker" ? (
+          signedIn ? (
+            <FileBrowser
+              mode="pick"
+              onPickFile={(f, slug) => onPickLocker(f, slug)}
+              onClose={() => setView("choose")}
+              height={320}
+              accept={accept}
+            />
+          ) : (
+            <SignInPrompt onBack={() => setView("choose")} />
+          )
         ) : signedIn ? (
-          <FileBrowser
-            mode="pick"
-            onPickFile={(f, slug) => onPickLocker(f, slug)}
-            onClose={() => setView("choose")}
-            height={320}
+          <GenerateView
             accept={accept}
+            onBack={() => setView("choose")}
+            onGenerated={onGenerated}
           />
         ) : (
           <SignInPrompt onBack={() => setView("choose")} />
@@ -350,8 +393,8 @@ const closeBtn: React.CSSProperties = {
 
 const chooseGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 10,
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: 8,
 };
 
 const choiceBtn: React.CSSProperties = {
@@ -359,18 +402,23 @@ const choiceBtn: React.CSSProperties = {
   flexDirection: "column",
   alignItems: "flex-start",
   gap: 4,
-  padding: "14px 14px",
+  padding: "12px 12px",
   background: "#fff",
-  border: "1px solid rgba(0,0,0,0.12)",
+  border: "1px solid rgba(20, 17, 15, 0.10)",
   borderRadius: 12,
   cursor: "pointer",
   textAlign: "left",
   fontFamily: "inherit",
   color: "#14110f",
+  minHeight: 76,
 };
 
-const choiceTitle: React.CSSProperties = { fontWeight: 600, fontSize: 14 };
-const choiceSub: React.CSSProperties = { color: "#5a554f", fontSize: 12 };
+const choiceTitle: React.CSSProperties = { fontWeight: 600, fontSize: 13.5 };
+const choiceSub: React.CSSProperties = {
+  color: "#5a554f",
+  fontSize: 11.5,
+  lineHeight: 1.35,
+};
 
 const primaryBtn: React.CSSProperties = {
   background: "#3a62f5",

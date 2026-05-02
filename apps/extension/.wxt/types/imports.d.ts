@@ -3,6 +3,7 @@ export {}
 declare global {
   const ContentScriptContext: typeof import('wxt/utils/content-script-context').ContentScriptContext
   const FileBrowser: typeof import('/Users/claudius/openstore/apps/extension/components/FileBrowser').FileBrowser
+  const GenerateView: typeof import('/Users/claudius/openstore/apps/extension/components/GenerateView').GenerateView
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const Logo: typeof import('/Users/claudius/openstore/apps/extension/components/Logo').Logo
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
@@ -83,6 +84,6 @@ declare global {
   export type { TrpcError } from '/Users/claudius/openstore/apps/extension/utils/api'
   import('/Users/claudius/openstore/apps/extension/utils/api')
   // @ts-ignore
-  export type { Workspace, FolderRow, FileRow, Breadcrumb, ApiResult } from '/Users/claudius/openstore/apps/extension/utils/messaging'
+  export type { Workspace, FolderRow, FileRow, Breadcrumb, ApiResult, GenerationTypeRow } from '/Users/claudius/openstore/apps/extension/utils/messaging'
   import('/Users/claudius/openstore/apps/extension/utils/messaging')
 }

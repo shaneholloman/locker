@@ -67,6 +67,30 @@ interface ProtocolMap {
     size: number;
     dataBase64: string;
   }>;
+
+  // The Generate flow.
+  listGenerationTypes(): ApiResult<GenerationTypeRow[]>;
+  generateFile(data: {
+    workspaceSlug: string;
+    typeId: string;
+    prompt: string;
+    attachments?: { name: string; mimeType: string; dataBase64: string }[];
+    lockerFileIds?: string[];
+  }): ApiResult<{
+    name: string;
+    mimeType: string;
+    size: number;
+    dataBase64: string;
+  }>;
+}
+
+export interface GenerationTypeRow {
+  id: string;
+  label: string;
+  description: string;
+  extension: string;
+  mimeType: string;
+  kind: "text" | "image";
 }
 
 export const { sendMessage, onMessage } =
