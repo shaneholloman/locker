@@ -22,9 +22,22 @@ import {
 
 export const runtime = "nodejs";
 
-// Generated file size cap. Keeps the response under the messaging structured-
-// clone limit when the extension forwards bytes through chrome.runtime.
-const MAX_OUTPUT_BYTES = 25 * 1024 * 1024; // 25 MB
+// Per-attachment + per-output byte cap. Bounds both the bytes the extension
+// hands us as base64 and the bytes the model returns. Keeps responses under
+// the messaging structured-clone limit when the extension forwards bytes
+// through chrome.runtime, and prevents an authenticated user from pinning
+// arbitrary memory by sending several oversized attachments in one request.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_OUTPUT_BYTES = MAX_ATTACHMENT_BYTES;
+// Bound the total across all attachments per request. With 8 max attachments,
+// a strict per-attachment cap alone would still allow ~200 MB of buffered
+// memory; cap the cumulative sum so a single request can't blow past the
+// per-attachment limit just by repeating it.
+const MAX_TOTAL_ATTACHMENT_BYTES = MAX_ATTACHMENT_BYTES;
+// Base64 inflates by ~4/3, plus up to two `=` pad chars and a small fudge
+// for whitespace tolerance in some clients. zod runs after JSON parsing, so
+// this cap is a backstop — the platform body-size limit is the first line.
+const MAX_BASE64_CHARS = Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 8;
 
 const DEFAULT_IMAGE_MODEL = "openai/gpt-image-1";
 
@@ -32,7 +45,10 @@ const attachmentSchema = z.object({
   name: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(255),
   // base64-encoded bytes from the extension's File → arrayBuffer → btoa path.
-  dataBase64: z.string().min(1),
+  // String-length cap is a cheap guard so we reject before allocating a
+  // Buffer; the decoded-byte cap below is what actually enforces parity with
+  // the Locker-file attachment limit.
+  dataBase64: z.string().min(1).max(MAX_BASE64_CHARS),
 });
 
 const bodySchema = z.object({
@@ -48,6 +64,13 @@ const bodySchema = z.object({
 
 function decodeBase64(b64: string): Buffer {
   return Buffer.from(b64, "base64");
+}
+
+class AttachmentTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AttachmentTooLargeError";
+  }
 }
 
 async function loadLockerFile(
@@ -86,14 +109,22 @@ async function loadLockerFile(
       if (done) break;
       if (!value) continue;
       total += value.byteLength;
-      // Same cap as the output: don't load arbitrarily large attachments.
-      if (total > MAX_OUTPUT_BYTES) {
+      // Same cap as client-supplied attachments: don't load arbitrarily large
+      // bytes from storage either.
+      if (total > MAX_ATTACHMENT_BYTES) {
         reader.cancel().catch(() => undefined);
-        throw new Error(`Attachment "${file.name}" exceeds the 25 MB cap`);
+        throw new AttachmentTooLargeError(
+          `Attachment "${file.name}" exceeds the 25 MB cap`,
+        );
       }
       chunks.push(value);
     }
     bytes = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+  }
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new AttachmentTooLargeError(
+      `Attachment "${file.name}" exceeds the 25 MB cap`,
+    );
   }
   return { name: file.name, mimeType: file.mimeType, bytes };
 }
@@ -211,21 +242,51 @@ export async function POST(req: NextRequest) {
   }
 
   // Materialize attachments — both client uploads and Locker references —
-  // into in-memory buffers we can hand to the model.
+  // into in-memory buffers we can hand to the model. Enforce parity with
+  // the Locker-attachment streaming cap on client uploads, and a cumulative
+  // cap so a single request can't push 8 × 25 MB of buffered memory.
   const materialized: AttachmentInput[] = [];
-  for (const a of attachments) {
-    const bytes = decodeBase64(a.dataBase64);
-    materialized.push({ name: a.name, mimeType: a.mimeType, bytes });
-  }
-  for (const id of lockerFileIds) {
-    const loaded = await loadLockerFile(id, membership.workspaceId);
-    if (!loaded) {
-      return NextResponse.json(
-        { error: `Locker file ${id} not found` },
-        { status: 404 },
-      );
+  let totalAttachmentBytes = 0;
+  try {
+    for (const a of attachments) {
+      const bytes = decodeBase64(a.dataBase64);
+      if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+        return NextResponse.json(
+          { error: `Attachment "${a.name}" exceeds the 25 MB cap` },
+          { status: 413 },
+        );
+      }
+      totalAttachmentBytes += bytes.byteLength;
+      if (totalAttachmentBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+        return NextResponse.json(
+          { error: "Attachments exceed the 25 MB total cap" },
+          { status: 413 },
+        );
+      }
+      materialized.push({ name: a.name, mimeType: a.mimeType, bytes });
     }
-    materialized.push(loaded);
+    for (const id of lockerFileIds) {
+      const loaded = await loadLockerFile(id, membership.workspaceId);
+      if (!loaded) {
+        return NextResponse.json(
+          { error: `Locker file ${id} not found` },
+          { status: 404 },
+        );
+      }
+      totalAttachmentBytes += loaded.bytes.byteLength;
+      if (totalAttachmentBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+        return NextResponse.json(
+          { error: "Attachments exceed the 25 MB total cap" },
+          { status: 413 },
+        );
+      }
+      materialized.push(loaded);
+    }
+  } catch (err) {
+    if (err instanceof AttachmentTooLargeError) {
+      return NextResponse.json({ error: err.message }, { status: 413 });
+    }
+    throw err;
   }
 
   try {
