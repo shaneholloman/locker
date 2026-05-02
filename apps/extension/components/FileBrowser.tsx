@@ -150,6 +150,11 @@ export function FileBrowser({
   return (
     <div style={styles.root}>
       <div style={styles.workspaceRow}>
+        {onClose ? (
+          <button style={styles.backBtn} onClick={onClose} aria-label="Back">
+            <ArrowLeft size={16} />
+          </button>
+        ) : null}
         <Select
           value={activeSlug}
           options={workspaces.map((w) => ({
@@ -163,11 +168,6 @@ export function FileBrowser({
           }
           disabled={workspaces.length === 0}
         />
-        {onClose ? (
-          <button style={styles.closeBtn} onClick={onClose} aria-label="Close">
-            ×
-          </button>
-        ) : null}
       </div>
 
       <div style={styles.breadcrumbRow}>
@@ -249,16 +249,19 @@ const styles: Record<string, React.CSSProperties> = {
       "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
   workspaceRow: { display: "flex", alignItems: "center", gap: 8 },
-  closeBtn: {
-    width: 26,
-    height: 26,
-    background: "transparent",
-    border: "1px solid rgba(0,0,0,0.12)",
-    borderRadius: 8,
-    fontSize: 18,
-    lineHeight: 1,
+  backBtn: {
+    width: 36,
+    height: 36,
+    flex: "0 0 auto",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(20, 17, 15, 0.045)",
+    border: "1px solid transparent",
+    borderRadius: 9999,
     cursor: "pointer",
     color: "#5a554f",
+    fontFamily: "inherit",
   },
   breadcrumbRow: {
     display: "flex",

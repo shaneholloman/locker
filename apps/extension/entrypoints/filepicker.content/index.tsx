@@ -1,6 +1,7 @@
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { createRoot, type Root } from "react-dom/client";
 import { StrictMode, useState } from "react";
+import { X } from "lucide-react";
 import { FileBrowser } from "../../components/FileBrowser";
 import { sendMessage, type FileRow } from "../../utils/messaging";
 import { isSignedIn } from "../../utils/storage";
@@ -196,7 +197,7 @@ function Dialog({
         <div style={panelHeader}>
           <span style={{ fontWeight: 700 }}>Choose a file</span>
           <button style={closeBtn} onClick={onClose} aria-label="Close">
-            ×
+            <X size={16} />
           </button>
         </div>
 
@@ -290,15 +291,19 @@ const panelHeader: React.CSSProperties = {
 };
 
 const closeBtn: React.CSSProperties = {
-  width: 26,
-  height: 26,
-  background: "transparent",
-  border: "1px solid rgba(0,0,0,0.12)",
-  borderRadius: 8,
-  fontSize: 18,
-  lineHeight: 1,
+  width: 32,
+  height: 32,
+  flex: "0 0 auto",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "rgba(20, 17, 15, 0.045)",
+  border: "1px solid transparent",
+  borderRadius: 9999,
   cursor: "pointer",
   color: "#5a554f",
+  fontFamily: "inherit",
+  transition: "background 120ms ease",
 };
 
 const chooseGrid: React.CSSProperties = {
