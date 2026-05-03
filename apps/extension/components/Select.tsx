@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface SelectOption<T extends string = string> {
@@ -32,10 +33,44 @@ export function Select<T extends string = string>({
       options.findIndex((o) => o.value === value),
     ),
   );
+  // The menu portals to document.body and uses position: fixed so it can
+  // layer above siblings that escape the dialog's stacking context — most
+  // notably the tldraw canvas, which renders into its own portal in light
+  // DOM. Computed lazily from the trigger's bounding rect; null when closed.
+  const [menuRect, setMenuRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const selected = options.find((o) => o.value === value) ?? null;
+
+  // Track the trigger's viewport rect while the menu is open so the portaled
+  // menu stays anchored under the trigger across scroll / resize. Capture
+  // phase on document catches scrolls inside ancestor containers (e.g. the
+  // dialog panel) that don't bubble to the window.
+  useEffect(() => {
+    if (!open) {
+      setMenuRect(null);
+      return;
+    }
+    const update = () => {
+      const t = triggerRef.current;
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      setMenuRect({ top: r.bottom + 6, left: r.left, width: r.width });
+    };
+    update();
+    document.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      document.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
 
   // Outside-click + Escape close. Listening on the wrap's owner document keeps
   // this working when the component is rendered inside a shadow root — the
@@ -45,13 +80,17 @@ export function Select<T extends string = string>({
     if (!open) return;
     const onPointer = (e: MouseEvent) => {
       const path = e.composedPath ? e.composedPath() : [];
-      if (
+      // The wrap lives in the dialog's shadow root; the menu lives in light
+      // DOM via portal. Clicks land in either tree should keep us open.
+      const insideWrap =
         wrapRef.current &&
         (path.includes(wrapRef.current) ||
-          wrapRef.current.contains(e.target as Node))
-      ) {
-        return;
-      }
+          wrapRef.current.contains(e.target as Node));
+      const insideMenu =
+        menuRef.current &&
+        (path.includes(menuRef.current) ||
+          menuRef.current.contains(e.target as Node));
+      if (insideWrap || insideMenu) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
@@ -136,46 +175,58 @@ export function Select<T extends string = string>({
         <ChevronDown size={16} style={styles.chevron} />
       </button>
 
-      {open ? (
-        <div role="listbox" style={styles.menu}>
-          {options.length === 0 ? (
-            <div style={styles.empty}>No options</div>
-          ) : (
-            options.map((opt, i) => {
-              const active = opt.value === value;
-              const isHi = i === highlight;
-              return (
-                <button
-                  key={opt.value}
-                  role="option"
-                  aria-selected={active}
-                  type="button"
-                  onMouseEnter={() => setHighlight(i)}
-                  onClick={() => {
-                    onChange(opt.value);
-                    setOpen(false);
-                    triggerRef.current?.focus();
-                  }}
-                  style={{
-                    ...styles.item,
-                    ...(isHi ? styles.itemActive : null),
-                  }}
-                >
-                  <span style={styles.itemBody}>
-                    <span style={styles.itemLabel}>{opt.label}</span>
-                    {opt.description ? (
-                      <span style={styles.itemDescription}>
-                        {opt.description}
+      {open && menuRect
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              style={{
+                ...styles.menu,
+                top: menuRect.top,
+                left: menuRect.left,
+                width: menuRect.width,
+              }}
+            >
+              {options.length === 0 ? (
+                <div style={styles.empty}>No options</div>
+              ) : (
+                options.map((opt, i) => {
+                  const active = opt.value === value;
+                  const isHi = i === highlight;
+                  return (
+                    <button
+                      key={opt.value}
+                      role="option"
+                      aria-selected={active}
+                      type="button"
+                      onMouseEnter={() => setHighlight(i)}
+                      onClick={() => {
+                        onChange(opt.value);
+                        setOpen(false);
+                        triggerRef.current?.focus();
+                      }}
+                      style={{
+                        ...styles.item,
+                        ...(isHi ? styles.itemActive : null),
+                      }}
+                    >
+                      <span style={styles.itemBody}>
+                        <span style={styles.itemLabel}>{opt.label}</span>
+                        {opt.description ? (
+                          <span style={styles.itemDescription}>
+                            {opt.description}
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
-                  </span>
-                  {active ? <Check size={14} style={styles.check} /> : null}
-                </button>
-              );
-            })
-          )}
-        </div>
-      ) : null}
+                      {active ? <Check size={14} style={styles.check} /> : null}
+                    </button>
+                  );
+                })
+              )}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -234,11 +285,14 @@ const styles: Record<string, React.CSSProperties> = {
   placeholder: { color: T.inkMute },
   chevron: { color: T.inkSoft, flex: "0 0 auto" },
   menu: {
-    position: "absolute",
-    top: "calc(100% + 6px)",
-    left: 0,
-    right: 0,
-    zIndex: 100,
+    // top / left / width are written per-render from the trigger's rect.
+    position: "fixed",
+    // int32 max so we layer above the dialog's mountHost (2147483640) and
+    // any sibling portals (e.g. the tldraw canvas at 2147483647 — same
+    // ceiling, but the menu is always appended last and wins on order).
+    zIndex: 2147483647,
+    boxSizing: "border-box",
+    fontFamily: "inherit",
     background: T.popoverBg,
     border: `1px solid ${T.border}`,
     borderRadius: 18,

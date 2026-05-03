@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Loader2 } from "lucide-react";
 import { Tldraw, type Editor, type TLExportType } from "tldraw";
 import tldrawCssText from "tldraw/tldraw.css?inline";
@@ -25,27 +26,69 @@ export default function DrawCanvas({
   busy,
   onUse,
 }: DrawCanvasProps) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [name, setName] = useState(`untitled${extension}`);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // tldraw ships its CSS as a stylesheet expected to live in <head>. The
-  // dialog renders inside a shadow root, so the page-level <head> is invisible
-  // to the canvas; we adopt the bundled CSS as a string and append it inside
-  // the same root the canvas is mounted in. Idempotent — once per root.
+  // tldraw attaches its `pointermove` listener to `ownerDocument.body`
+  // (see @tldraw/editor's useCanvasEvents). Inside a shadow root, pointer
+  // events bubble out and get retargeted, which combined with React's
+  // synthetic-event delegation on the inner shadow root reliably loses
+  // the moves between pointerdown and pointerup — so the line / arrow
+  // tools register a click but never see the drag, producing dots.
+  //
+  // The fix: render <Tldraw> via a portal into document.body (light DOM)
+  // and keep an empty <div> placeholder inside the dialog to hold the
+  // layout. We position the portal target absolutely over the placeholder
+  // and keep it in sync with scroll / resize.
   useEffect(() => {
-    const node = wrapRef.current;
-    if (!node) return;
-    const root = node.getRootNode();
-    const target =
-      root instanceof ShadowRoot ? (root as ParentNode) : document.head;
-    if (target.querySelector("style[data-locker-tldraw-css]")) return;
-    const style = document.createElement("style");
-    style.setAttribute("data-locker-tldraw-css", "");
-    style.textContent = tldrawCssText;
-    target.appendChild(style);
+    const placeholder = placeholderRef.current;
+    if (!placeholder) return;
+
+    // Inject the tldraw stylesheet into the page's document.head — the
+    // canvas now lives in light DOM, not the shadow root. Idempotent.
+    if (!document.head.querySelector("style[data-locker-tldraw-css]")) {
+      const style = document.createElement("style");
+      style.setAttribute("data-locker-tldraw-css", "");
+      style.textContent = tldrawCssText;
+      document.head.appendChild(style);
+    }
+
+    const target = document.createElement("div");
+    target.setAttribute("data-locker-tldraw-portal", "");
+    // Match the dialog's z-index ceiling so the canvas sits above page
+    // content but below floating UI we render later in this same root.
+    target.style.cssText =
+      "position: fixed; z-index: 2147483647; pointer-events: auto;";
+    document.body.appendChild(target);
+
+    const updatePosition = () => {
+      const r = placeholder.getBoundingClientRect();
+      target.style.top = `${r.top}px`;
+      target.style.left = `${r.left}px`;
+      target.style.width = `${r.width}px`;
+      target.style.height = `${r.height}px`;
+    };
+
+    updatePosition();
+    setPortalTarget(target);
+
+    // Capture-phase scroll catches scrolls on any ancestor (the dialog
+    // panel scrolls when its content overflows), not just the window.
+    const ro = new ResizeObserver(updatePosition);
+    ro.observe(placeholder);
+    document.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      ro.disconnect();
+      document.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+      target.remove();
+    };
   }, []);
 
   // Track the active generation type so the suggested filename follows the
@@ -90,11 +133,12 @@ export default function DrawCanvas({
   const disabled = busy || exporting;
 
   return (
-    <div ref={wrapRef} style={root}>
+    <div style={root}>
       {error ? <div style={errorBox}>{error}</div> : null}
-      <div style={canvasWrap}>
-        <Tldraw onMount={setEditor} />
-      </div>
+      <div ref={placeholderRef} style={canvasWrap} />
+      {portalTarget
+        ? createPortal(<Tldraw onMount={setEditor} />, portalTarget)
+        : null}
       <div style={composerBar}>
         <input
           type="text"

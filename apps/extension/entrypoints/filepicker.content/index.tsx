@@ -52,8 +52,13 @@ export default defineContentScript({
     function ensureMount(): { host: HTMLElement; root: Root } {
       if (mountHost && mountRoot) return { host: mountHost, root: mountRoot };
       mountHost = document.createElement("div");
+      // We sit a step below the int32 max so flows that need to render in
+      // the page's light DOM (e.g. the tldraw canvas, which has to live
+      // outside our shadow root for its document-level pointer listeners
+      // to work) can portal in at z-index 2147483647 and layer cleanly
+      // above the dialog without us having to manage stacking by hand.
       mountHost.style.cssText =
-        "all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none;";
+        "all: initial; position: fixed; inset: 0; z-index: 2147483640; pointer-events: none;";
       // Shadow DOM so the page's CSS can't bleed in and rewrite our styles.
       const shadow = mountHost.attachShadow({ mode: "open" });
       const inner = document.createElement("div");
