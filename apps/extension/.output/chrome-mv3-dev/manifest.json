@@ -10,6 +10,7 @@
     "96": "icon/96.png",
     "128": "icon/128.png"
   },
+  "homepage_url": "https://locker.dev",
   "permissions": [
     "storage",
     "activeTab",
@@ -31,7 +32,7 @@
       ],
       "matches": [
         "http://localhost:3000/*",
-        "http://localhost:3000/*"
+        "https://locker.dev/*"
       ]
     }
   ],

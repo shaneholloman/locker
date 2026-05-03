@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Brush,
   Check,
   ChevronDown,
   FileText,
@@ -9,6 +10,7 @@ import {
   Paperclip,
   RotateCcw,
   Sparkles,
+  Type as TypeIcon,
   Upload,
   Wand2,
   X,
@@ -20,6 +22,13 @@ import {
 } from "../utils/messaging";
 import { Select } from "./Select";
 import { FileBrowser } from "./FileBrowser";
+
+// tldraw ships ~MBs of code — defer the import so it only lands in the
+// content-script bundle's hot path when the user actually opens the Draw tab.
+// The chunk is still bundled into the content script (MV3 doesn't support
+// separate chunks for content scripts cleanly), but lazy() means we don't pay
+// the React mount cost until the tab is selected.
+const DrawCanvas = lazy(() => import("./DrawCanvas"));
 
 interface GenerateViewProps {
   // HTML5 input.accept tokens. We narrow the available generation kinds to
@@ -104,6 +113,41 @@ interface GeneratedFile {
   dataBase64: string;
 }
 
+// "ai" is always available; the manual / draw alternates depend on the kind
+// of file we're producing. Text gets a plain typing surface; images get a
+// tldraw canvas. Other kinds (none today) fall back to AI-only.
+type GenerationMode = "ai" | "manual" | "draw";
+
+function modesForKind(
+  kind: GenerationTypeRow["kind"] | undefined,
+): GenerationMode[] {
+  if (kind === "image") return ["ai", "draw"];
+  if (kind === "text") return ["ai", "manual"];
+  return ["ai"];
+}
+
+function modeLabel(mode: GenerationMode): string {
+  if (mode === "ai") return "Generate";
+  if (mode === "manual") return "Type";
+  return "Draw";
+}
+
+function modeIcon(mode: GenerationMode) {
+  if (mode === "ai") return <Sparkles size={13} />;
+  if (mode === "manual") return <TypeIcon size={13} />;
+  return <Brush size={13} />;
+}
+
+function utf8ToBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
 export function GenerateView({
   accept,
   onGenerated,
@@ -121,6 +165,10 @@ export function GenerateView({
   // or send it back through the model with a refinement instruction.
   const [result, setResult] = useState<GeneratedFile | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
+  // Generation mode is independent of `result` — switching tabs while a
+  // result is showing lets the user start a manual / drawn alternative
+  // without losing their AI output. The result UI only renders in AI mode.
+  const [mode, setMode] = useState<GenerationMode>("ai");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -158,6 +206,24 @@ export function GenerateView({
       setTypeId(availableTypes[0]!.id);
     }
   }, [availableTypes, typeId]);
+
+  const selectedType = useMemo(
+    () => availableTypes.find((t) => t.id === typeId) ?? null,
+    [availableTypes, typeId],
+  );
+
+  const availableModes = useMemo(
+    () => modesForKind(selectedType?.kind),
+    [selectedType],
+  );
+
+  // If the active mode disappears when the type changes (e.g. user switches
+  // from a text type to an image type while in "Type" mode), fall back to AI.
+  useEffect(() => {
+    if (!availableModes.includes(mode)) {
+      setMode(availableModes[0] ?? "ai");
+    }
+  }, [availableModes, mode]);
 
   const removeAttachment = (id: string) => {
     setAttachments((rows) => rows.filter((r) => r.id !== id));
@@ -341,8 +407,6 @@ export function GenerateView({
     );
   }
 
-  const selectedType = availableTypes.find((t) => t.id === typeId) ?? null;
-
   return (
     <div style={root}>
       <div style={topRow}>
@@ -371,73 +435,118 @@ export function GenerateView({
         )}
       </div>
 
+      {availableModes.length > 1 ? (
+        <div style={tabsContainer} role="tablist">
+          {availableModes.map((m) => {
+            const active = m === mode;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMode(m)}
+                disabled={generating}
+                style={active ? tabActive : tabInactive}
+              >
+                {modeIcon(m)} {modeLabel(m)}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {error ? <div style={errorBox}>{error}</div> : null}
 
-      {result ? (
-        <PreviewSurface
-          file={result}
-          generating={generating}
-          refinePrompt={refinePrompt}
-          onRefinePromptChange={setRefinePrompt}
-          onRefine={refine}
-          onUse={() => onGenerated(result)}
-          onStartOver={startOver}
-        />
-      ) : (
-        <div style={composer}>
-          <textarea
-            style={textarea}
-            placeholder={`Describe the ${selectedType?.label?.toLowerCase() ?? "file"} you want…`}
-            value={prompt}
-            rows={4}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={generating}
+      {mode === "ai" ? (
+        result ? (
+          <PreviewSurface
+            file={result}
+            generating={generating}
+            refinePrompt={refinePrompt}
+            onRefinePromptChange={setRefinePrompt}
+            onRefine={refine}
+            onUse={() => onGenerated(result)}
+            onStartOver={startOver}
           />
-
-          {attachments.length > 0 ? (
-            <div style={attachmentList}>
-              {attachments.map((a) => (
-                <div key={a.id} style={attachmentChip} title={a.name}>
-                  <span style={attachmentDot(a.kind)} />
-                  <span style={attachmentName}>{a.name}</span>
-                  <button
-                    style={removeBtn}
-                    onClick={() => removeAttachment(a.id)}
-                    aria-label={`Remove ${a.name}`}
-                    disabled={generating}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div style={composerActions}>
-            <AttachMenu
+        ) : (
+          <div style={composer}>
+            <textarea
+              style={textarea}
+              placeholder={`Describe the ${selectedType?.label?.toLowerCase() ?? "file"} you want…`}
+              value={prompt}
+              rows={4}
+              onChange={(e) => setPrompt(e.target.value)}
               disabled={generating}
-              onChooseComputer={() => fileInputRef.current?.click()}
-              onChooseLocker={() => setPickerOpen(true)}
             />
-            <button
-              type="button"
-              style={generateBtn}
-              onClick={submit}
-              disabled={generating || !prompt.trim() || !typeId}
-            >
-              {generating ? (
-                <>
-                  <Loader2 size={14} className="locker-spin" /> Generating…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} /> Generate
-                </>
-              )}
-            </button>
+
+            {attachments.length > 0 ? (
+              <div style={attachmentList}>
+                {attachments.map((a) => (
+                  <div key={a.id} style={attachmentChip} title={a.name}>
+                    <span style={attachmentDot(a.kind)} />
+                    <span style={attachmentName}>{a.name}</span>
+                    <button
+                      style={removeBtn}
+                      onClick={() => removeAttachment(a.id)}
+                      aria-label={`Remove ${a.name}`}
+                      disabled={generating}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div style={composerActions}>
+              <AttachMenu
+                disabled={generating}
+                onChooseComputer={() => fileInputRef.current?.click()}
+                onChooseLocker={() => setPickerOpen(true)}
+              />
+              <button
+                type="button"
+                style={generateBtn}
+                onClick={submit}
+                disabled={generating || !prompt.trim() || !typeId}
+              >
+                {generating ? (
+                  <>
+                    <Loader2 size={14} className="locker-spin" /> Generating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} /> Generate
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      ) : mode === "manual" && selectedType ? (
+        <ManualEditor
+          extension={selectedType.extension}
+          mimeType={selectedType.mimeType}
+          busy={generating}
+          onUse={onGenerated}
+        />
+      ) : mode === "draw" && selectedType ? (
+        <Suspense
+          fallback={
+            <div style={loadingRow}>
+              <Loader2 size={16} className="locker-spin" /> Loading canvas…
+            </div>
+          }
+        >
+          <DrawCanvas
+            extension={selectedType.extension}
+            mimeType={selectedType.mimeType}
+            busy={generating}
+            onUse={onGenerated}
+          />
+        </Suspense>
+      ) : null}
 
       <input
         ref={fileInputRef}
@@ -445,6 +554,71 @@ export function GenerateView({
         style={{ display: "none" }}
         onChange={handleComputerPick}
       />
+    </div>
+  );
+}
+
+interface ManualEditorProps {
+  extension: string;
+  mimeType: string;
+  busy: boolean;
+  onUse: (file: GeneratedFile) => void;
+}
+
+function ManualEditor({ extension, mimeType, busy, onUse }: ManualEditorProps) {
+  const [name, setName] = useState(`untitled${extension}`);
+  const [content, setContent] = useState("");
+
+  // Track the active type so the suggested filename follows the chosen
+  // text format. Same convention as DrawCanvas: only update if the user
+  // hasn't customized the name yet.
+  useEffect(() => {
+    setName((prev) =>
+      prev.startsWith("untitled.") ? `untitled${extension}` : prev,
+    );
+  }, [extension]);
+
+  const submit = () => {
+    const dataBase64 = utf8ToBase64(content);
+    const size = new TextEncoder().encode(content).length;
+    onUse({
+      name: name.trim() || `untitled${extension}`,
+      mimeType,
+      size,
+      dataBase64,
+    });
+  };
+
+  return (
+    <div style={composer}>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        style={inlineNameInput}
+        placeholder={`untitled${extension}`}
+        disabled={busy}
+        aria-label="File name"
+      />
+      <textarea
+        style={largeTextarea}
+        placeholder="Type your file content…"
+        value={content}
+        rows={10}
+        onChange={(e) => setContent(e.target.value)}
+        disabled={busy}
+      />
+      <div style={composerActions}>
+        <span style={refineHint}>{formatBytes(new Blob([content]).size)}</span>
+        <button
+          type="button"
+          style={generateBtn}
+          onClick={submit}
+          disabled={busy}
+        >
+          <Check size={14} /> Use this file
+        </button>
+      </div>
     </div>
   );
 }
@@ -701,6 +875,70 @@ const topRow: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
+};
+
+const tabsContainer: React.CSSProperties = {
+  display: "inline-flex",
+  alignSelf: "flex-start",
+  gap: 2,
+  padding: 3,
+  background: "rgba(20, 17, 15, 0.045)",
+  borderRadius: 9999,
+};
+
+const tabBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "5px 12px",
+  borderRadius: 9999,
+  border: "1px solid transparent",
+  cursor: "pointer",
+  fontSize: 12,
+  fontWeight: 500,
+  fontFamily: "inherit",
+  transition: "background 120ms ease, color 120ms ease",
+};
+
+const tabInactive: React.CSSProperties = {
+  ...tabBase,
+  background: "transparent",
+  color: "#5a554f",
+};
+
+const tabActive: React.CSSProperties = {
+  ...tabBase,
+  background: "#fff",
+  color: "#14110f",
+  boxShadow: "0 1px 2px rgba(20, 17, 15, 0.08)",
+};
+
+const inlineNameInput: React.CSSProperties = {
+  width: "100%",
+  height: 32,
+  padding: "0 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(20, 17, 15, 0.10)",
+  background: "rgba(20, 17, 15, 0.02)",
+  fontSize: 12.5,
+  color: "#14110f",
+  fontFamily: "inherit",
+  outline: "none",
+};
+
+const largeTextarea: React.CSSProperties = {
+  width: "100%",
+  resize: "vertical",
+  minHeight: 200,
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  fontFamily:
+    "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
+  fontSize: 13,
+  color: "#14110f",
+  padding: 0,
+  lineHeight: 1.5,
 };
 
 const iconGhostBtn: React.CSSProperties = {

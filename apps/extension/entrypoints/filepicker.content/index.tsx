@@ -6,7 +6,6 @@ import { FileBrowser } from "../../components/FileBrowser";
 import { GenerateView } from "../../components/GenerateView";
 import { Logo } from "../../components/Logo";
 import { sendMessage, type FileRow } from "../../utils/messaging";
-import { isSignedIn } from "../../utils/storage";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -89,7 +88,14 @@ export default defineContentScript({
     }
 
     async function openDialogFor(input: HTMLInputElement) {
-      const signedIn = await isSignedIn();
+      // Probe the live session on every open instead of trusting the cached
+      // signedIn flag in chrome.storage.local. The cache can drift — the
+      // popup updates it via /api/auth/get-session on its own open, but the
+      // content script has no parallel refresh path, so a user who signed in
+      // via another tab (or whose cache got cleared by an unrelated 401)
+      // would be stranded on the sign-in prompt even when the cookie is
+      // valid. refreshSession both probes and writes the cache through.
+      const signedIn = await sendMessage("refreshSession", undefined);
       const accept = parseAccept(input);
       const { root } = ensureMount();
 
@@ -257,7 +263,7 @@ function Dialog({
               onClick={() => setView("generate")}
             >
               <Sparkles size={14} />
-              Generate with AI
+              Generate
             </button>
           </>
         ) : view === "locker" ? (

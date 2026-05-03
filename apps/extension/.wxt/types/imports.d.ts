@@ -2,6 +2,7 @@
 export {}
 declare global {
   const ContentScriptContext: typeof import('wxt/utils/content-script-context').ContentScriptContext
+  const DrawCanvas: typeof import('/Users/claudius/openstore/apps/extension/components/DrawCanvas').default
   const FileBrowser: typeof import('/Users/claudius/openstore/apps/extension/components/FileBrowser').FileBrowser
   const GenerateView: typeof import('/Users/claudius/openstore/apps/extension/components/GenerateView').GenerateView
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
@@ -16,6 +17,7 @@ declare global {
   const createIframeUi: typeof import('wxt/utils/content-script-ui/iframe').createIframeUi
   const createIntegratedUi: typeof import('wxt/utils/content-script-ui/integrated').createIntegratedUi
   const createShadowRootUi: typeof import('wxt/utils/content-script-ui/shadow-root').createShadowRootUi
+  const cssInlineD: typeof import('/Users/claudius/openstore/apps/extension/utils/css-inline.d').default
   const defineAppConfig: typeof import('wxt/utils/define-app-config').defineAppConfig
   const defineBackground: typeof import('wxt/utils/define-background').defineBackground
   const defineContentScript: typeof import('wxt/utils/define-content-script').defineContentScript
